@@ -3,6 +3,14 @@
 Сервис: FastAPI + фоновая очередь, пайплайн запускается отдельным процессом на каждое видео.
 Рабочая директория везде ниже — корень репозитория (`/shared/home/sagyndyk.sagadinov/datathon`).
 
+## Быстрый запуск на сервере (tmux)
+
+```bash
+bash scripts/start_service.sh   # API + ngrok-туннель в tmux-сессии fortebank, с авто-перезапуском
+bash scripts/stop_service.sh    # остановить
+bash scripts/api_smoke.sh https://<NGROK_DOMAIN> <API_KEY>   # проверка по ТЗ снаружи
+```
+
 ## 1. Установка
 
 ```bash
