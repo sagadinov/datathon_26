@@ -150,3 +150,19 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def load_any_cached(frames: FrameSet, cache_dir: Path | None = None) -> list[list[Detection]] | None:
+    """Return detections from ANY existing cache file for this frame set (newest first), regardless of the
+    detector config. For offline analysis / self-tests only: never triggers the detector."""
+    d = cache_dir or CACHE_DIR / "detections"
+    key = frames.frames[0].path.parent.name
+    cands = sorted(d.glob(f"{key}_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for p in cands:
+        try:
+            data = json.loads(p.read_text())
+        except Exception:
+            continue
+        if len(data["frames"]) == len(frames):
+            return [[Detection.from_list(r) for r in fr["dets"]] for fr in data["frames"]]
+    return None
