@@ -14,10 +14,11 @@ from src.pipeline.state import FrameState, Timeline, runs
 
 CFG = {
     "cash_score": 0.35, "money_bag_score": 0.35, "cup_score": 0.42, "book_score": 0.42,
-    "bag_score": 0.38, "jacket_score": 0.38, "safe_open_score": 0.40,
+    "bag_score": 0.38, "jacket_score": 0.38, "safe_open_score": 0.47, "safe_open_rel": 0.25,
+    "near_gap": 0.3,
     "present_k": 3, "present_n": 5,                 # object present if seen in k of the last n frames
     "T1_min_s": 2.0, "T1_gap": 0.25,                # cashier farther than this (desk heights) = away
-    "T2_min_s": 1.5, "T3_min_s": 2.0, "T4_min_s": 2.0, "T5_min_s": 3.0, "T6_min_s": 3.0,
+    "T2_min_s": 1.5, "T3_min_s": 3.0, "T4_min_s": 2.0, "T5_min_s": 3.0, "T6_min_s": 3.0,
     "T8_min_s": 3.0, "T8_client_min_s": 2.0, "T9_leave_s": 6.0, "T7_min_s": 1.0,
 }
 
@@ -65,7 +66,11 @@ class Series:
         self.book = _present([_obj_score(s, "book") for s in F], cfg["book_score"], k, n)
         self.pbag = _present([_obj_score(s, "bag") for s in F], cfg["bag_score"], k, n)
         self.jacket = _present([_obj_score(s, "jacket") for s in F], cfg["jacket_score"], k, n)
-        self.safe_open = _present([s.safe_door_open for s in F], cfg["safe_open_score"], k, n)
+        # safe door: relative to this video's own closed-door baseline (20th percentile), with a floor
+        so = [s.safe_door_open for s in F]
+        base = float(np.percentile(so, 20)) if so else 0.0
+        self.safe_thr = max(cfg["safe_open_score"], base + cfg["safe_open_rel"])
+        self.safe_open = _present(so, self.safe_thr, k, n)
         self.lights_off = [s.lights_off for s in F]
         self.screen_on = [s.screen_on for s in F]
         self.n_persons = [s.n_persons for s in F]
@@ -73,9 +78,9 @@ class Series:
         self.cashier_seat = [any(p.at_seat or (p.is_cashier and p.desk_gap == 0 and p.anchor_overlap >= 0.15)
                                  for p in s.persons) for s in F]
         self.someone_at_safe = [any(p.at_safe for p in s.persons) for s in F]
-        self.near_count = [sum(p.desk_gap <= 0.6 for p in s.persons) for s in F]
-        self.cashier_side = [sum(p.anchor_overlap >= 0.15 for p in s.persons) for s in F]
-        self.client = [any((not p.is_cashier) and p.desk_gap <= 0.6 for p in s.persons) for s in F]
+        self.near_count = [sum(p.desk_gap <= cfg["near_gap"] for p in s.persons) for s in F]
+        self.cashier_side = [sum(p.at_seat for p in s.persons) for s in F]
+        self.client = [any((not p.is_cashier) and p.desk_gap <= cfg["near_gap"] for p in s.persons) for s in F]
         self.hands_below = [s.hands_below_desk > 0 for s in F]
 
 

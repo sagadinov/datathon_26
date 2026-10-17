@@ -5,6 +5,7 @@ logs/
 .venv/
 bin/
 jobs/
+cache/
 *.mov
 *.mp4
 # python

@@ -38,12 +38,12 @@ def git_sha() -> str:
 
 def _run_one(args: tuple) -> dict:
     """Worker: analyse one video, return a compact row (no base64 images)."""
-    video, device, use_vlm = args
+    video, device, use_vlm, budget = args
     from src.pipeline.run import analyze
 
     t0 = time.perf_counter()
     try:
-        res = analyze(video, device=device, use_vlm=use_vlm)
+        res = analyze(video, device=device, use_vlm=use_vlm, time_budget_sec=budget)
         err = None
     except Exception:  # keep the eval going; a crash counts as no_violation
         res, err = {"verdict": "no_violation", "violations": []}, traceback.format_exc(limit=3)
@@ -109,6 +109,8 @@ def main() -> None:
     ap.add_argument("--only", default=None, help="comma-separated video numbers, e.g. 4,20,18")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--tag", default="", help="free-text tag stored in the result file")
+    ap.add_argument("--time-budget", type=float, default=10000.0,
+                    help="per-video budget passed to the pipeline (default: unlimited, use the full frame cache)")
     ap.add_argument("--videos-dir", default=None,
                     help="folder with X-N.mov files instead of data/open/videos (e.g. data/aug/hflip/videos); "
                          "labels still come from open_labels.xlsx, matched by number N")
@@ -130,7 +132,7 @@ def main() -> None:
     print(f"evaluating {len(labels)} videos from {videos_dir}, device={args.device}, vlm={not args.no_vlm}, "
           f"jobs={args.jobs}")
 
-    tasks = [(str(l.video), args.device, not args.no_vlm) for l in labels]
+    tasks = [(str(l.video), args.device, not args.no_vlm, args.time_budget) for l in labels]
     t0 = time.perf_counter()
     if args.jobs > 1:
         os.environ.setdefault("TORCH_THREADS", str(max(1, (os.cpu_count() or 8) // args.jobs // 2)))
