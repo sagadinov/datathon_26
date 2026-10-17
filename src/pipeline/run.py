@@ -66,14 +66,17 @@ def main() -> None:
     ap.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
     ap.add_argument("--no-vlm", action="store_true")
     ap.add_argument("--keep-debug", action="store_true", help="keep the _debug block in the output")
+    ap.add_argument("--time-budget", type=float, default=170.0, help="seconds; partial result after it")
     args = ap.parse_args()
 
-    result = analyze(args.video, device=args.device, use_vlm=not args.no_vlm)
+    result = analyze(args.video, device=args.device, use_vlm=not args.no_vlm, time_budget_sec=args.time_budget)
     if not args.keep_debug:
         result.pop("_debug", None)
     text = json.dumps(result, ensure_ascii=False, indent=2)
     if args.out:
-        Path(args.out).write_text(text)
+        tmp = Path(args.out).with_suffix(".tmp")
+        tmp.write_text(text)
+        tmp.replace(args.out)
         log.info("wrote %s", args.out)
     else:
         print(text)
