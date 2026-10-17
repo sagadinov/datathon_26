@@ -123,6 +123,18 @@ def analyze(video_path: str | Path, device: str = "cpu", use_vlm: bool = False,
             log.info("roi: %d candidate frames, valuables in %d", len(cand), sum(tl.cash_roi))
         except Exception as e:  # never fail the job because of the second look
             log.info("roi stage skipped: %s", e)
+    with timed(log, "blob", timings):
+        try:
+            if os.environ.get("USE_BLOB", "1") != "1":
+                raise RuntimeError("disabled (USE_BLOB=0)")
+            from src.pipeline.blob import desk_blobs
+            boxes = desk_blobs(sub, tl)
+            tl.blob_boxes = boxes
+            series = [bool(b) for b in boxes]
+            tl.cash_roi = series if tl.cash_roi is None else [a or b for a, b in zip(tl.cash_roi, series)]
+            log.info("blob: new desk object in %d of %d frames", sum(series), len(series))
+        except Exception as e:  # never fail the job because of the background-difference stage
+            log.info("blob stage skipped: %s", e)
     with timed(log, "rules", timings):
         events = merge_events(run_rules(tl))
     log.info("events: %s", [(e.type_id, round(e.t_start, 1), round(e.t_end, 1), round(e.score, 2)) for e in events])

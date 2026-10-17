@@ -85,6 +85,7 @@ class Timeline:
     lock_events: list[float] = field(default_factory=list)
     room_empty_start: bool = False              # nobody in the room during the first seconds
     cash_roi: list | None = None                # roi.py second look: valuables on the desk per frame
+    blob_boxes: list | None = None              # blob.py: boxes of new static desk objects per frame
     seat_box: tuple | None = None               # median seated cashier box (people.CashierModel)
 
     def __len__(self) -> int:

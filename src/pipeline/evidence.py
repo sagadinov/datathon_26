@@ -19,7 +19,7 @@ def encode_jpeg_b64(img, quality: int = 80, long_side: int = 640) -> str:
     return base64.b64encode(buf.tobytes()).decode("ascii") if ok else ""
 
 
-def _annotate(img, st, event: Event):
+def _annotate(img, st, event: Event, tl: Timeline | None = None):
     """Draw the objects relevant to the event type (people, valuables, cup, safe) on a copy."""
     img = img.copy()
     want = {"T1": {"cash", "money_bag", "bag", "book"}, "T5": {"bag", "money_bag", "jacket", "book"}, "T6": {"cup", "book"},
@@ -28,6 +28,12 @@ def _annotate(img, st, event: Event):
         if o.label in want and (o.on_desk or o.in_cashier) and o.score >= 0.3 and o.is_event_object:
             x1, y1, x2, y2 = (int(v) for v in o.box)
             cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 2)
+    blobs = getattr(tl, "blob_boxes", None) if tl is not None else None
+    if event.type_id == "T1" and blobs:                       # new static desk object found by blob.py
+        k = next((j for j, f in enumerate(tl.frames) if f is st), -1)
+        for b in (blobs[k] if 0 <= k < len(blobs) else []):
+            x1, y1, x2, y2 = (int(v) for v in b)
+            cv2.rectangle(img, (x1 - 2, y1 - 2), (x2 + 2, y2 + 2), (0, 0, 255), 2)
     for p in st.persons:
         x1, y1, x2, y2 = (int(v) for v in p.box)
         cv2.rectangle(img, (x1, y1), (x2, y2), (0, 200, 0) if p.is_cashier else (255, 160, 0), 2)
@@ -52,6 +58,6 @@ def evidence_frames(frames: FrameSet, tl: Timeline, event: Event, n: int = 3, an
         st = tl.frames[i]
         img = frames.frames[st.index].load()
         if annotate:
-            img = _annotate(img, st, event)
+            img = _annotate(img, st, event, tl)
         out.append({"timestamp_sec": round(st.t, 1), "image_base64": encode_jpeg_b64(img)})
     return out

@@ -1,0 +1,4 @@
+# Optional: pose-based T7 experiment (src/pipeline/pose.py, not used by the service)
+# pose (T7 wrists): RTMPose ONNX via rtmlib, CPU; weights in models/pose/ (scripts/download_models.sh)
+rtmlib>=0.0.13
+onnxruntime>=1.18
