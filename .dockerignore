@@ -1,0 +1,10 @@
+.venv
+data
+models
+logs
+jobs
+cache
+.git
+bin
+*.mov
+*.mp4

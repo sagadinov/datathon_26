@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # Smoke test of the public API against the spec (CLAUDE.md section 2).
 # Usage: bash scripts/api_smoke.sh [URL] [KEY]
-#   URL default: http://127.0.0.1:${PORT:-8000}   KEY default: API_KEY from .env
+#   URL default: http://127.0.0.1:${PORT:-8000}   KEY default: $API_KEY (environment, then .env)
 #   env: VIDEO=<path.mov> (default data/open/videos/X-1.mov)  POLL_TIMEOUT=300  POLL_EVERY=2
 # Exit code 0 when every check passed.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-if [ -f "$ROOT/.env" ]; then set -a; . "$ROOT/.env"; set +a; fi
+if [ -f "$ROOT/.env" ]; then
+  # .env provides defaults; variables already set in the shell win (same precedence as serve.sh).
+  _saved="$(export -p)"
+  set -a; . "$ROOT/.env"; set +a
+  eval "$_saved"
+fi
 URL="${1:-http://127.0.0.1:${PORT:-8000}}"; URL="${URL%/}"
 KEY="${2:-${API_KEY:-}}"
 VIDEO="${VIDEO:-$ROOT/data/open/videos/X-1.mov}"
@@ -90,7 +95,8 @@ R="$(curl -s --max-time 60 -X POST "$URL/api/v1/analyze" -H "X-API-Key: $KEY" -F
 JOB="$(printf '%s' "$R" | jget job_id)"
 if [[ "$JOB" =~ ^[0-9a-f]{8}$ ]]; then
   T1=$(date +%s); BODY="$(poll "$JOB")"; check_job "$JOB" failed "$BODY" $(( $(date +%s) - T1 ))
-  echo "  error=$(printf '%s' "$BODY" | jget error)"
+  ERR="$(printf '%s' "$BODY" | jget error)"; echo "  error=$ERR"
+  case "$ERR" in *"/"*) bad "error text leaks a server path";; *) ok "error text is clean";; esac
 else
   bad "broken-file upload did not return a job_id: $R"
 fi

@@ -2,6 +2,8 @@
 # From this directory:   docker compose up -d --build
 # Secrets/config come from ../.env (API_KEY, WORKERS, TORCH_THREADS, TIME_BUDGET_SEC, MAX_UPLOAD_MB).
 # Host port: API_PORT in the shell environment (default 8000); the container always listens on 8000.
+# Add a .dockerignore at the repo root first (docs/HOWTO.md, section "Docker"), or the build
+# context will include .venv, data, models, cache and logs (many GB).
 services:
   api:
     build:
@@ -19,7 +21,8 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      - ../models:/app/models:ro
+      # models is read-write on purpose: the HF hub cache may create lock/marker files on load.
+      - ../models:/app/models
       - ../jobs:/app/jobs
       - ../logs:/app/logs
       - ../cache:/app/cache

@@ -134,6 +134,8 @@ def create_app(settings: Settings) -> FastAPI:
                  settings.workers, settings.torch_threads, settings.time_budget_sec,
                  settings.jobs_dir, requeued)
         yield
+        log.info("api stopping: running=%d queue=%d (jobs in flight stay `processing`)",
+                 worker.running, worker.queue_size)
         worker.stop()
         log.info("api stopped")
 
@@ -149,8 +151,9 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/health")
     async def health() -> dict:
-        return {"status": "ok", "queue": worker.queue_size, "workers": worker.n_workers,
-                "running": worker.running}
+        alive = worker.ensure_threads()  # live worker threads (dead ones are respawned here)
+        return {"status": "ok" if alive >= worker.n_workers else "degraded",
+                "queue": worker.queue_size, "workers": alive, "running": worker.running}
 
     @app.post("/api/v1/analyze", dependencies=[Depends(require_key)], openapi_extra=UPLOAD_SCHEMA)
     async def analyze(request: Request) -> dict:

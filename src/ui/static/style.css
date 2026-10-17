@@ -150,6 +150,9 @@ input:disabled { background: var(--surface-2); color: var(--muted); }
 .btn-ghost:hover:not(:disabled) { background: var(--accent-soft); }
 .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.lookup summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--accent); }
+.lookup-row { display: flex; gap: 8px; margin-top: 10px; }
+.lookup-row input { flex: 1 1 auto; min-width: 0; }
 
 /* Status: uploading / processing / error */
 .status {
@@ -177,6 +180,8 @@ input:disabled { background: var(--surface-2); color: var(--muted); }
 
 /* Result: verdict badge, meta line, violation cards, raw JSON */
 .result { display: grid; gap: 16px; }
+/* Grid items default to min-width:auto: a long unbroken line (JSON, URL) would widen the whole column. */
+main.wrap > *, .panel > *, .result > *, .card > *, .rule > *, .rule-source > * { min-width: 0; }
 .badge {
   display: flex;
   gap: 14px;
@@ -187,7 +192,7 @@ input:disabled { background: var(--surface-2); color: var(--muted); }
 }
 .badge-ok { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok); }
 .badge-bad, .badge-failed { background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad); }
-.badge-neutral { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn); }
+.badge-neutral, .badge-partial { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn); }
 .badge-icon {
   flex: none;
   width: 40px; height: 40px;
@@ -268,7 +273,18 @@ input:disabled { background: var(--surface-2); color: var(--muted); }
 .rule-name { margin: 0; font-weight: 600; }
 .rule-text, .rule-doc, .rule-clause { margin: 0; overflow-wrap: anywhere; }
 .rule-clause { color: var(--muted); }
-.rule-source { display: grid; gap: 2px; padding-top: 6px; border-top: 1px solid var(--line-strong); }
+.rule-source { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid var(--line-strong); }
+.rule-meta { margin: 0; color: var(--muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+.rule-sub { font-weight: 600; color: var(--accent-strong); }
+.rule-quote {
+  margin: 4px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
 .rule-link { color: var(--accent-strong); font-weight: 600; justify-self: start; overflow-wrap: anywhere; }
 .rule-link::after { content: " \2197"; }
 
@@ -279,9 +295,10 @@ input:disabled { background: var(--surface-2); color: var(--muted); }
   background: #f3f1f8;
   border-radius: 8px;
   font: 0.8rem/1.45 var(--mono);
-  overflow-x: auto;
+  overflow: auto;
   max-height: 420px;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .raw-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .raw-all { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 18px; }

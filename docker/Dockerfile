@@ -1,6 +1,9 @@
 # CPU-only image: FastAPI service + pipeline. UNTESTED (no Docker on the cluster) - docs/HOWTO.md.
 # Build from the repo root:   docker build -f docker/Dockerfile -t datathon-cashier-api .
 # Weights are NOT baked in: mount ./models (filled by scripts/download_models.sh) at /app/models.
+# Put a .dockerignore at the repo root before building (see docs/HOWTO.md, "Docker").
+# docker stop sends SIGTERM: uvicorn shuts down gracefully, jobs in flight stay `processing`
+# in the jobs volume and are re-queued when the container starts again.
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
