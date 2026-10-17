@@ -98,8 +98,17 @@ def analyze(video_path: str | Path, device: str = "cpu", use_vlm: bool = False,
     left = time_budget_sec - (time.perf_counter() - t_start) - 12.0
     sub = _subsample(frames, left)
     with timed(log, "detect", timings):
-        kw = {} if sub is frames else {"cache_dir": CACHE_DIR / f"detections_stride"}
-        dets = cached_detections(sub, det, **kw) if cache else cached_detections(sub, det, cache_dir=Path("/nonexistent"))
+        kw = {} if sub is frames else {"cache_dir": CACHE_DIR / "detections_stride"}
+        if not cache:
+            kw["cache_dir"] = Path("/nonexistent")
+        deadline = t_start + time_budget_sec - 10.0
+        dets = cached_detections(sub, det, deadline=deadline, **kw)
+        if any(d is None for d in dets):                      # budget hit: drop skipped frames
+            keep = [i for i, d in enumerate(dets) if d is not None]
+            dets = [dets[i] for i in keep]
+            sub = FrameSet(sub.meta, sub.sample_fps * len(keep) / max(1, len(sub)), sub.long_side,
+                           [sub.frames[i] for i in keep])
+            log.warning("budget: kept %d of %d frames", len(keep), len(dets) if False else len(keep))
     with timed(log, "timeline", timings):
         tl = build_timeline(sub, dets)
     with timed(log, "rules", timings):

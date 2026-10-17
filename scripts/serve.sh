@@ -7,7 +7,12 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-if [ -f .env ]; then set -a; . ./.env; set +a; fi
+if [ -f .env ]; then
+  # .env provides defaults; variables already set in the shell (PORT=18800 bash scripts/serve.sh) win.
+  _saved="$(export -p)"
+  set -a; . ./.env; set +a
+  eval "$_saved"
+fi
 : "${API_KEY:?API_KEY is not set: copy .env.example to .env and fill it in}"
 PORT="${PORT:-8000}"
 HOST="${HOST:-127.0.0.1}"

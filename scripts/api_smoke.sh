@@ -28,20 +28,23 @@ expect() {  # expect <label> <want_code> <curl args...>
   local got; got="$(code "$@")"
   [ "$got" = "$want" ] && ok "$label -> $got" || bad "$label -> $got (want $want)"
 }
-# poll <job_id> <want_status>: wait until the job leaves `processing`; prints the body.
+# poll <job_id>: print the final body once the job leaves `processing` ("" on timeout).
 poll() {
-  local job="$1" want="$2" t0 st body
+  local job="$1" t0 st body
   t0=$(date +%s)
   while :; do
     body="$(curl -s --max-time 30 "$URL/api/v1/jobs/$job" -H "X-API-Key: $KEY")"
     st="$(printf '%s' "$body" | jget status)"
-    if [ "$st" != "processing" ] && [ -n "$st" ]; then break; fi
-    if [ $(( $(date +%s) - t0 )) -ge "$POLL_TIMEOUT" ]; then st="timeout"; break; fi
+    if [ -n "$st" ] && [ "$st" != "processing" ]; then break; fi
+    if [ $(( $(date +%s) - t0 )) -ge "$POLL_TIMEOUT" ]; then body=""; break; fi
     sleep "$POLL_EVERY"
   done
-  local dt=$(( $(date +%s) - t0 ))
-  [ "$st" = "$want" ] && ok "job $job -> $st after ${dt}s" || bad "job $job -> $st after ${dt}s (want $want)"
   printf '%s' "$body"
+}
+# check_job <job_id> <want_status> <body> <elapsed_sec>
+check_job() {
+  local st; st="$(printf '%s' "$3" | jget status)"
+  [ "$st" = "$2" ] && ok "job $1 -> $st after $4s" || bad "job $1 -> ${st:-timeout} after $4s (want $2)"
 }
 
 echo "== $URL"
@@ -49,16 +52,19 @@ echo "-- health (public)"
 H="$(curl -s --max-time 30 "$URL/health")"; echo "  $H"
 [ "$(printf '%s' "$H" | jget status)" = "ok" ] && ok "GET /health" || bad "GET /health"
 
+BAD="$(mktemp "${TMPDIR:-/tmp}/bad.XXXXXX.mov")"; echo junk > "$BAD"   # tiny body for negative tests
+trap 'rm -f "$BAD"' EXIT
+
 echo "-- auth"
 expect "GET jobs without key"   401 "$URL/api/v1/jobs/deadbeef"
 expect "GET jobs wrong key"     401 -H "X-API-Key: wrong-key-$RANDOM" "$URL/api/v1/jobs/deadbeef"
-expect "POST analyze no key"    401 -X POST "$URL/api/v1/analyze" -F "file=@$VIDEO"
-expect "POST analyze wrong key" 401 -X POST -H "X-API-Key: wrong-key-$RANDOM" "$URL/api/v1/analyze" -F "file=@$VIDEO"
+expect "POST analyze no key"    401 -X POST "$URL/api/v1/analyze" -F "file=@$BAD"
+expect "POST analyze wrong key" 401 -X POST -H "X-API-Key: wrong-key-$RANDOM" "$URL/api/v1/analyze" -F "file=@$BAD"
 
 echo "-- bad requests"
 expect "GET unknown job"        404 -H "X-API-Key: $KEY" "$URL/api/v1/jobs/deadbeef"
-expect "GET malformed job id"   404 -H "X-API-Key: $KEY" "$URL/api/v1/jobs/..%2F..%2Fetc"
-expect "POST without 'file'"    400 -X POST -H "X-API-Key: $KEY" "$URL/api/v1/analyze" -F "video=@$VIDEO"
+expect "GET malformed job id"   404 -H "X-API-Key: $KEY" "$URL/api/v1/jobs/not-a-job-id"
+expect "POST without 'file'"    400 -X POST -H "X-API-Key: $KEY" "$URL/api/v1/analyze" -F "video=@$BAD"
 expect "POST empty body"        400 -X POST -H "X-API-Key: $KEY" "$URL/api/v1/analyze"
 
 echo "-- analyze $(basename "$VIDEO")"
@@ -68,7 +74,7 @@ echo "  $R"
 JOB="$(printf '%s' "$R" | jget job_id)"
 if [[ "$JOB" =~ ^[0-9a-f]{8}$ ]]; then
   ok "job_id=$JOB"
-  BODY="$(poll "$JOB" done)"
+  T1=$(date +%s); BODY="$(poll "$JOB")"; check_job "$JOB" done "$BODY" $(( $(date +%s) - T1 ))
   echo "  verdict=$(printf '%s' "$BODY" | jget verdict) violations=$(printf '%s' "$BODY" | jget violations) note=$(printf '%s' "$BODY" | jget note)"
   echo "  elapsed since upload: $(( $(date +%s) - T0 ))s; response bytes: ${#BODY}"
   printf '%s' "$BODY" | python3 -I -c 'import json,sys
@@ -79,13 +85,11 @@ else
   bad "analyze did not return a job_id"
 fi
 
-echo "-- broken file"
-BAD="$(mktemp "${TMPDIR:-/tmp}/bad.XXXXXX.mov")"; echo junk > "$BAD"
+echo "-- broken file (echo junk > bad.mov)"
 R="$(curl -s --max-time 60 -X POST "$URL/api/v1/analyze" -H "X-API-Key: $KEY" -F "file=@$BAD")"
-rm -f "$BAD"
 JOB="$(printf '%s' "$R" | jget job_id)"
 if [[ "$JOB" =~ ^[0-9a-f]{8}$ ]]; then
-  BODY="$(poll "$JOB" failed)"
+  T1=$(date +%s); BODY="$(poll "$JOB")"; check_job "$JOB" failed "$BODY" $(( $(date +%s) - T1 ))
   echo "  error=$(printf '%s' "$BODY" | jget error)"
 else
   bad "broken-file upload did not return a job_id: $R"

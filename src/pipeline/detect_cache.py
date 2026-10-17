@@ -43,8 +43,13 @@ def load_cached(frames: FrameSet, cfg: dict, cache_dir: Path | None = None) -> l
 
 def cached_detections(frames: FrameSet, detector: Detector | None = None, batch_size: int = 4,
                       cache_dir: Path | None = None, frame_indices: list[int] | None = None,
-                      det_kw: dict | None = None) -> list[list[Detection]]:
-    """Detections for every frame (or only `frame_indices`; others empty). Reads/writes the cache."""
+                      det_kw: dict | None = None, deadline: float | None = None) -> list:
+    """Detections for every frame (or only `frame_indices`). Reads/writes the cache.
+
+    With `deadline` (absolute time.perf_counter() value) the loop measures its own speed and
+    skips frames (growing stride) so that it finishes in time; skipped frames are returned as
+    None and nothing is cached in that case.
+    """
     det_kw = det_kw or DET_KW
     cfg = detector.config if detector else {**_cfg_without_model(det_kw)}
     hit = load_cached(frames, cfg, cache_dir)
@@ -58,18 +63,30 @@ def cached_detections(frames: FrameSet, detector: Detector | None = None, batch_
         if hit is not None and frame_indices is None:
             return hit
     idx = list(range(len(frames))) if frame_indices is None else sorted(frame_indices)
-    results: list[list[Detection]] = [[] for _ in frames]
-    t0 = time.perf_counter()
-    for i in range(0, len(idx), batch_size):
-        chunk = idx[i:i + batch_size]
+    results: list = [None for _ in frames] if deadline else [[] for _ in frames]
+    t0, done, skipped = time.perf_counter(), 0, False
+    pos = 0
+    while pos < len(idx):
+        chunk = idx[pos:pos + batch_size]
         outs = detector.detect_batch([frames.frames[j].load() for j in chunk])
         for j, o in zip(chunk, outs):
             results[j] = o
-        if (i // batch_size) % 10 == 9:
-            log.info("detect %d/%d frames, %.2fs/frame", i + len(chunk), len(idx),
-                     (time.perf_counter() - t0) / (i + len(chunk)))
-    log.info("detected %d frames in %.1fs", len(idx), time.perf_counter() - t0)
-    if frame_indices is None:
+        done += len(chunk)
+        pos += len(chunk)
+        per_frame = (time.perf_counter() - t0) / done
+        if deadline and pos < len(idx):
+            remaining_t = deadline - time.perf_counter()
+            need = (len(idx) - pos) * per_frame
+            if need > remaining_t:
+                k = int(need / max(remaining_t, 1e-6)) + 1
+                rest = idx[pos::k]
+                log.warning("time budget: %.0fs needed, %.0fs left -> stride %d for the remaining %d frames",
+                            need, remaining_t, k, len(rest))
+                idx, pos, skipped = idx[:pos] + rest, pos, True
+        if (done // batch_size) % 10 == 0:
+            log.info("detect %d frames, %.2fs/frame", done, per_frame)
+    log.info("detected %d frames in %.1fs", done, time.perf_counter() - t0)
+    if frame_indices is None and not skipped:
         p = cache_path(frames, cfg, cache_dir)
         p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_suffix(".tmp")

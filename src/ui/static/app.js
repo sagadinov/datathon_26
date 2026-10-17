@@ -1,8 +1,6 @@
-/* ForteBank cash-discipline video check.
- * Flow: pick a video -> POST api/v1/analyze -> poll GET api/v1/jobs/{id} every 2 s -> render result.
- * Vanilla JS, relative URLs (works behind any prefix or tunnel), no external dependencies.
- * Every server string is rendered through textContent; links are only created for http(s) URLs.
- */
+/* ForteBank cash-discipline video check: pick a video -> POST api/v1/analyze -> poll GET api/v1/jobs/{id}
+ * every 2 s -> render verdict, violation cards, evidence frames and rule sources. Vanilla JS, relative URLs
+ * (works behind any prefix or tunnel). Server strings go through textContent; links only for http(s) URLs. */
 (function () {
   'use strict';
 
@@ -12,7 +10,6 @@
   const POLL_LIMIT_MS = 10 * 60 * 1000; // the jury waits 5 min per video; the UI waits twice that
   const POLL_NET_RETRIES = 5;           // consecutive network failures tolerated while polling
   const STORAGE_KEY = 'fortebank_api_key';
-  const RU = 'ru-RU';
 
   const $ = (id) => document.getElementById(id);
   const ui = {
@@ -25,94 +22,77 @@
   const fail = (message, code) => Object.assign(new Error(message), { code });
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  // ---- DOM helpers -----------------------------------------------------------------------------
+  // ---- DOM and formatting helpers (Russian locale) ----
   function h(tag, attrs, ...children) {
     const node = document.createElement(tag);
     Object.keys(attrs || {}).forEach((k) => {
-      const v = attrs[k];
-      if (v == null) return;
-      if (k === 'class') node.className = v;
-      else if (k === 'text') node.textContent = v;
-      else if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), v);
-      else node.setAttribute(k, v);
+      if (attrs[k] == null) return;
+      if (k === 'class') node.className = attrs[k];
+      else if (k === 'text') node.textContent = attrs[k];
+      else node.setAttribute(k, attrs[k]);
     });
     children.forEach((c) => { if (c != null) node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
     return node;
   }
   const clear = (node) => { while (node.firstChild) node.removeChild(node.firstChild); };
-
-  // ---- Formatting (Russian locale) -------------------------------------------------------------
-  const fmtNum = (x, digits) => Number(x).toLocaleString(RU, { maximumFractionDigits: digits });
+  const line = (cls, text) => (text ? h('p', { class: cls, text: String(text) }) : null);
+  const fmtNum = (x, digits) => Number(x).toLocaleString('ru-RU', { maximumFractionDigits: digits });
   const fmtSeconds = (sec) => fmtNum(sec, 1) + ' с';
   const toNum = (x) => (x == null || x === '' ? NaN : Number(x));
-  function fmtTimecode(sec) {
-    const total = Math.floor(sec);
-    return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
-  }
-  const fmtTime = (sec) => fmtTimecode(sec) + ' · ' + fmtSeconds(sec);
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const fmtTime = (sec) => pad2(Math.floor(sec / 60)) + ':' + pad2(Math.floor(sec) % 60) + ' · ' + fmtSeconds(sec);
   function fmtSize(bytes) {
     if (bytes >= 1024 ** 3) return fmtNum(bytes / 1024 ** 3, 2) + ' ГБ';
     if (bytes >= 1024 ** 2) return fmtNum(bytes / 1024 ** 2, 1) + ' МБ';
-    if (bytes >= 1024) return fmtNum(bytes / 1024, 0) + ' КБ';
-    return bytes + ' Б';
+    return bytes >= 1024 ? fmtNum(bytes / 1024, 0) + ' КБ' : bytes + ' Б';
   }
   function plural(n, one, few, many) {
     const n10 = n % 10, n100 = n % 100;
     if (n10 === 1 && n100 !== 11) return one;
-    if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return few;
-    return many;
+    return n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14) ? few : many;
   }
   const isHttpUrl = (u) => typeof u === 'string' && /^https?:\/\/\S+$/i.test(u);
   const parseJson = (text) => { try { return JSON.parse(text); } catch (e) { return text; } };
 
-  // ---- API key: ?key=... -> localStorage -> input --------------------------------------------
+  // ---- API key: ?key=... -> localStorage -> input ----
   function loadKey() {
     let key = '';
     try {
       const params = new URLSearchParams(location.search);
-      if (params.get('key')) {
-        key = params.get('key').trim();
-        params.delete('key'); // keep the key out of the address bar and browser history
+      key = (params.get('key') || '').trim();
+      if (key) { // keep the key out of the address bar and browser history
+        params.delete('key');
         const qs = params.toString();
         history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
       }
     } catch (e) { /* no URL/history API: ignore */ }
-    try {
-      if (key) localStorage.setItem(STORAGE_KEY, key);
-      else key = localStorage.getItem(STORAGE_KEY) || '';
-    } catch (e) { /* storage blocked: the key lives only in the input */ }
+    try { key = key || localStorage.getItem(STORAGE_KEY) || ''; localStorage.setItem(STORAGE_KEY, key); } catch (e) { /* storage blocked */ }
     ui.key.value = key;
   }
   const getKey = () => ui.key.value.trim();
   const saveKey = () => { try { localStorage.setItem(STORAGE_KEY, getKey()); } catch (e) { /* ignore */ } };
   const apiHeaders = () => ({ 'X-API-Key': getKey(), 'ngrok-skip-browser-warning': '1' });
 
-  // ---- File selection ----------------------------------------------------------------------------
+  // ---- File selection ----
+  const updateSubmit = () => { ui.submit.disabled = state.busy || !state.file; };
   function setFile(file) {
     if (!file) return;
     const name = file.name || '';
-    const dot = name.lastIndexOf('.');
-    const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
-    const isVideo = ext === 'mov' || ext === 'mp4' || (!ext && /^video\//.test(file.type || ''));
-    if (!isVideo) { showError('Поддерживаются только видеофайлы .mov и .mp4. Выбран файл: ' + (name || 'без имени')); return; }
+    const ext = name.indexOf('.') >= 0 ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '';
+    if (ext !== 'mov' && ext !== 'mp4' && !(ext === '' && /^video\//.test(file.type || ''))) {
+      showError('Поддерживаются только видеофайлы .mov и .mp4. Выбран файл: ' + (name || 'без имени'));
+      return;
+    }
     state.file = file;
     ui.fileName.textContent = name;
     ui.fileSize.textContent = fmtSize(file.size);
-    ui.fileInfo.hidden = false;
-    ui.drop.classList.add('has-file');
+    toggleFileInfo(true);
     hideStatus();
-    updateSubmit();
   }
-  function clearFile() {
-    state.file = null;
-    ui.fileInput.value = '';
-    ui.fileInfo.hidden = true;
-    ui.drop.classList.remove('has-file');
-    updateSubmit();
-  }
-  const updateSubmit = () => { ui.submit.disabled = state.busy || !state.file; };
+  function clearFile() { state.file = null; ui.fileInput.value = ''; toggleFileInfo(false); }
+  function toggleFileInfo(on) { ui.fileInfo.hidden = !on; ui.drop.classList.toggle('has-file', on); updateSubmit(); }
 
-  // ---- Status panel ------------------------------------------------------------------------------
+  // ---- Status panel ----
   function setStatus(kind, title, details) {
     clear(ui.status);
     ui.status.className = 'status status-' + kind;
@@ -126,19 +106,19 @@
   }
   const showError = (message) => { setStatus('error', message); };
   const hideStatus = () => { ui.status.hidden = true; clear(ui.status); };
+  const setNote = (text) => { if (state.noteEl) state.noteEl.textContent = text; };
+  const stopTicker = () => { clearInterval(state.ticker); state.ticker = null; };
   function startTicker(t0) {
     stopTicker();
-    state.ticker = setInterval(() => {
-      if (state.titleEl) state.titleEl.textContent = 'Обработка... ' + Math.floor((Date.now() - t0) / 1000) + ' с';
-    }, 1000);
+    const tick = () => { if (state.titleEl) state.titleEl.textContent = 'Обработка... ' + Math.floor((Date.now() - t0) / 1000) + ' с'; };
+    state.ticker = setInterval(tick, 1000);
   }
-  function stopTicker() { if (state.ticker) { clearInterval(state.ticker); state.ticker = null; } }
 
-  // ---- HTTP ----------------------------------------------------------------------------------------
+  // ---- HTTP ----
   function extractDetail(body) {
     if (typeof body === 'string') return /^\s*</.test(body) ? '' : body.trim().slice(0, 300); // skip HTML error pages
     if (!body || typeof body !== 'object') return '';
-    let d = body.detail != null ? body.detail : (body.error != null ? body.error : (body.message != null ? body.message : body.reason));
+    let d = [body.detail, body.error, body.message, body.reason].find((x) => x != null);
     if (Array.isArray(d)) d = d.map((x) => (x && x.msg) || JSON.stringify(x)).join('; ');
     else if (d && typeof d === 'object') d = JSON.stringify(d);
     return d == null ? '' : String(d).slice(0, 300);
@@ -150,137 +130,101 @@
     if (status === 413) return 'Файл слишком большой: сервер отклонил загрузку' + tail;
     if (status === 404) return 'Задание не найдено на сервере' + tail;
     if (status === 429) return 'Сервер перегружен, попробуйте позже' + tail;
-    if (status >= 500) return 'Ошибка сервера (' + status + ')' + tail;
-    return 'Сервер отклонил запрос (' + status + ')' + tail;
+    return (status >= 500 ? 'Ошибка сервера (' : 'Сервер отклонил запрос (') + status + ')' + tail;
   }
   // XMLHttpRequest instead of fetch: it reports upload progress for a 30 MB file over a tunnel.
   function upload(file) {
     return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      state.xhr = xhr;
+      const xhr = (state.xhr = new XMLHttpRequest());
       xhr.open('POST', ANALYZE_URL, true);
       const hdrs = apiHeaders();
       Object.keys(hdrs).forEach((k) => xhr.setRequestHeader(k, hdrs[k]));
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable && state.titleEl) state.titleEl.textContent = 'Загрузка... ' + Math.round((e.loaded / e.total) * 100) + ' %';
-      };
-      xhr.upload.onload = () => { if (state.titleEl) state.titleEl.textContent = 'Загрузка... ожидание ответа сервера'; };
+      const setTitle = (t) => { if (state.titleEl) state.titleEl.textContent = t; };
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) setTitle('Загрузка... ' + Math.round((e.loaded / e.total) * 100) + ' %'); };
+      xhr.upload.onload = () => setTitle('Загрузка... ожидание ответа сервера');
       xhr.onload = () => resolve({ status: xhr.status, body: parseJson(xhr.responseText) });
       xhr.onerror = () => reject(fail('Нет соединения с сервером или загрузка прервана. Проверьте сеть, адрес сервиса и размер файла.', 'network'));
       xhr.onabort = () => reject(fail('Проверка отменена', 'abort'));
-      const form = new FormData();
-      form.append('file', file, file.name);
+      const form = new FormData(); form.append('file', file, file.name);
       xhr.send(form);
     });
-  }
-  async function fetchJob(jobId) {
-    const res = await fetch(JOB_URL + encodeURIComponent(jobId), { headers: apiHeaders(), cache: 'no-store' });
-    return { status: res.status, body: parseJson(await res.text()) };
-  }
-  function progressNote(body) {
-    const parts = [];
-    if (body.status && body.status !== 'processing') parts.push('статус: ' + body.status);
-    if (typeof body.stage === 'string') parts.push('этап: ' + body.stage);
-    const p = toNum(body.progress);
-    if (isFinite(p)) parts.push(Math.round(p <= 1 ? p * 100 : p) + ' %');
-    return parts.join(' · ');
   }
   async function waitForResult(jobId, t0) {
     let netErrors = 0;
     for (;;) {
       if (state.stopped) throw fail('Проверка отменена', 'abort');
       if (Date.now() - t0 > POLL_LIMIT_MS) throw fail('Сервер не вернул результат за 10 минут. Задание ' + jobId + ' можно запросить позже.', 'timeout');
-      let r;
+      let res, body;
       try {
-        r = await fetchJob(jobId);
+        res = await fetch(JOB_URL + encodeURIComponent(jobId), { headers: apiHeaders(), cache: 'no-store' });
+        body = parseJson(await res.text());
         netErrors = 0;
       } catch (e) {
         if (++netErrors >= POLL_NET_RETRIES) throw fail('Потеряна связь с сервером во время обработки. Задание: ' + jobId, 'network');
-        if (state.noteEl) state.noteEl.textContent = 'Нет связи с сервером, повторяю запрос...';
+        setNote('Нет связи с сервером, повторяю запрос...');
         await sleep(POLL_INTERVAL_MS);
         continue;
       }
-      if (r.status >= 400) throw fail(describeHttpError(r.status, r.body), 'http');
-      const body = r.body && typeof r.body === 'object' ? r.body : {};
+      if (res.status >= 400) throw fail(describeHttpError(res.status, body), 'http');
+      if (!body || typeof body !== 'object') body = {};
       if (body.status === 'done' || body.status === 'failed') return body;
-      if (state.noteEl) state.noteEl.textContent = progressNote(body);
+      setNote(body.status && body.status !== 'processing' ? 'статус: ' + body.status : (typeof body.stage === 'string' ? 'этап: ' + body.stage : ''));
       await sleep(POLL_INTERVAL_MS);
     }
   }
 
-  // ---- Main flow -----------------------------------------------------------------------------------
+  // ---- Main flow ----
   function setBusy(busy) {
-    state.busy = busy;
-    state.stopped = false;
-    state.xhr = null;
-    ui.submit.hidden = busy;
-    ui.cancel.hidden = !busy;
-    ui.key.disabled = busy;
-    ui.toggleKey.disabled = busy;
-    ui.fileInput.disabled = busy;
-    ui.fileClear.disabled = busy;
-    ui.drop.classList.toggle('is-disabled', busy);
-    ui.drop.setAttribute('aria-disabled', String(busy));
+    Object.assign(state, { busy, stopped: false, xhr: null });
+    ui.submit.hidden = busy; ui.cancel.hidden = !busy;
+    ui.key.disabled = ui.toggleKey.disabled = ui.fileInput.disabled = ui.fileClear.disabled = busy;
+    ui.drop.classList.toggle('is-disabled', busy); ui.drop.setAttribute('aria-disabled', String(busy));
     updateSubmit();
   }
-  function cancelRun() {
-    state.stopped = true;
-    if (state.xhr) { try { state.xhr.abort(); } catch (e) { /* already finished */ } }
-  }
+  function cancelRun() { state.stopped = true; if (state.xhr) state.xhr.abort(); }
   async function run() {
     if (state.busy) return;
     if (!getKey()) { showError('Введите API-ключ'); ui.key.focus(); return; }
     if (!state.file) { showError('Выберите видеофайл .mov или .mp4'); return; }
     const file = state.file;
+    let jobId = '';
     setBusy(true);
-    ui.result.hidden = true;
-    clear(ui.result);
+    ui.result.hidden = true; clear(ui.result);
     try {
       state.titleEl = setStatus('busy', 'Загрузка...', [file.name + ', ' + fmtSize(file.size)]);
       const up = await upload(file);
       if (up.status >= 400) throw fail(describeHttpError(up.status, up.body), 'http');
-      const jobId = up.body && typeof up.body === 'object' ? up.body.job_id : null;
+      jobId = up.body && typeof up.body === 'object' && up.body.job_id != null ? String(up.body.job_id) : '';
       if (!jobId) throw fail('Сервер не вернул идентификатор задания (job_id)', 'protocol');
       const t0 = Date.now();
       state.noteEl = h('p', { class: 'status-detail' });
-      state.titleEl = setStatus('busy', 'Обработка... 0 с', [h('p', { class: 'status-detail' }, 'Задание: ', h('code', { text: String(jobId) })), state.noteEl]);
+      state.titleEl = setStatus('busy', 'Обработка... 0 с', [h('p', { class: 'status-detail' }, 'Задание: ', h('code', { text: jobId })), state.noteEl]);
       startTicker(t0);
-      const job = await waitForResult(String(jobId), t0);
-      stopTicker();
-      hideStatus();
-      renderResult(job, { jobId: String(jobId), file, clientSec: (Date.now() - t0) / 1000 });
+      const job = await waitForResult(jobId, t0);
+      stopTicker(); hideStatus();
+      renderResult(job, { jobId, file, clientSec: (Date.now() - t0) / 1000 });
     } catch (e) {
       stopTicker();
-      if (e && e.code === 'abort') hideStatus();
+      if (e && e.code === 'abort') setStatus('note', 'Проверка отменена', [jobId ? 'Задание ' + jobId + ' продолжит выполняться на сервере.' : null]);
       else if (e && e.code) showError(e.message);
-      else { showError('Непредвиденная ошибка в интерфейсе: ' + (e && e.message ? e.message : e)); console.error(e); }
+      else { console.error(e); showError('Непредвиденная ошибка в интерфейсе: ' + (e && e.message ? e.message : e)); }
     } finally {
       setBusy(false);
     }
   }
 
-  // ---- Result rendering ---------------------------------------------------------------------------
-  function serverProcessingSec(job) {
-    const t = job.timings || (job._debug && job._debug.timings) || {};
-    const cands = [job.processing_time_sec, job.processing_sec, job.processing_time, job.elapsed_sec, t.total];
-    for (const c of cands) if (typeof c === 'number' && isFinite(c)) return c;
-    return null;
-  }
+  // ---- Result rendering ----
   function badge(job, count) {
-    let kind, title, sub;
+    let kind = 'neutral', title = 'Вердикт не определён', sub = 'Сервер вернул неизвестный вердикт: ' + String(job.verdict);
     if (job.status === 'failed') {
-      kind = 'failed'; title = 'Обработка не удалась';
-      sub = 'Ошибка: ' + (extractDetail(job) || 'сервер не сообщил причину');
+      [kind, title, sub] = ['failed', 'Обработка не удалась', 'Ошибка: ' + (extractDetail(job) || 'сервер не сообщил причину')];
     } else if (job.verdict === 'violation') {
-      kind = 'bad'; title = 'Обнаружены признаки возможных нарушений';
+      [kind, title] = ['bad', 'Обнаружены признаки возможных нарушений'];
       sub = count ? count + ' ' + plural(count, 'нарушение', 'нарушения', 'нарушений') + '. Детали ниже: таймкод, кадры и нормативное основание.'
         : 'Список нарушений в ответе пуст, детали недоступны.';
     } else if (job.verdict === 'no_violation') {
-      kind = 'ok'; title = 'Нарушение не обнаружено';
+      [kind, title] = ['ok', 'Нарушение не обнаружено'];
       sub = 'Признаков нарушений кассовой дисциплины на записи не найдено. Кадры-доказательства прикладываются только к нарушениям.';
-    } else {
-      kind = 'neutral'; title = 'Вердикт не определён';
-      sub = 'Сервер вернул неизвестный вердикт: ' + String(job.verdict);
     }
     return h('div', { class: 'badge badge-' + kind, role: kind === 'ok' ? null : 'alert' },
       h('span', { class: 'badge-icon', 'aria-hidden': 'true' }),
@@ -289,59 +233,69 @@
   function metaLine(job, ctx) {
     const meta = h('div', { class: 'meta' });
     const add = (label, value, mono) => meta.appendChild(h('span', null, label + ': ', h(mono ? 'code' : 'b', { text: value })));
-    if (ctx.file) add('Файл', ctx.file.name + ' (' + fmtSize(ctx.file.size) + ')');
+    add('Файл', ctx.file.name + ' (' + fmtSize(ctx.file.size) + ')');
     add('Задание', String(job.job_id || ctx.jobId), true);
-    const srv = serverProcessingSec(job);
+    const t = job.timings || (job._debug && job._debug.timings) || {};
+    const srv = [job.processing_time_sec, job.processing_sec, job.elapsed_sec, t.total].find((c) => typeof c === 'number');
     if (srv != null) add('Время обработки', fmtSeconds(srv));
     else add('Время обработки (по часам браузера)', fmtSeconds(ctx.clientSec));
+    if (typeof job.note === 'string' && job.note) add('Примечание', job.note);
     return meta;
   }
   const toDataUrl = (b64) => (/^data:/i.test(b64) ? b64 : 'data:image/jpeg;base64,' + b64.replace(/\s+/g, ''));
   function framesBlock(frames) {
-    const wrap = h('div', { class: 'frames' });
     const valid = frames.filter((f) => f && typeof f.image_base64 === 'string' && f.image_base64.length > 0);
-    if (!valid.length) { wrap.appendChild(h('p', { class: 'frames-empty', text: 'Кадры-доказательства не приложены' })); return wrap; }
+    if (!valid.length) return h('p', { class: 'frames-empty', text: 'Кадры-доказательства не приложены' });
+    const wrap = h('div', { class: 'frames' });
     valid.forEach((f) => {
       const src = toDataUrl(f.image_base64);
       const ts = toNum(f.timestamp_sec);
-      const label = isFinite(ts) ? fmtTime(ts) : 'время не указано';
+      const time = isFinite(ts) ? fmtTime(ts) : 'время не указано';
       const btn = h('button', { type: 'button', class: 'frame', title: 'Открыть кадр в полном размере' },
-        h('img', { src, alt: 'Кадр, ' + label, loading: 'lazy', decoding: 'async' }),
-        h('span', { class: 'frame-ts', text: label }));
-      btn.addEventListener('click', () => openModal(src, 'Кадр, ' + label, btn));
+        h('img', { src, alt: 'Кадр, ' + time, loading: 'lazy', decoding: 'async' }),
+        h('span', { class: 'frame-ts', text: time }));
+      btn.addEventListener('click', () => openModal(src, 'Кадр, ' + time, btn));
       wrap.appendChild(btn);
     });
     return wrap;
   }
+  function sourceBlock(s) {
+    if (typeof s === 'string') s = { document: s };
+    if (!s || typeof s !== 'object') return null;
+    let link = null;
+    if (isHttpUrl(s.url)) {
+      let host = '';
+      try { host = new URL(s.url).hostname; } catch (e) { /* keep the generic label */ }
+      link = h('a', { class: 'rule-link', href: s.url, target: '_blank', rel: 'noopener noreferrer', text: 'Открыть источник' + (host ? ': ' + host : '') });
+    }
+    return h('div', { class: 'rule-source' }, line('rule-doc', s.document || s.title || s.name), line('rule-clause', s.clause),
+      line('rule-text', s.summary || s.note || s.text), link || line('rule-clause', s.url));
+  }
+  // `rule` may carry one `source` object (task spec) or a `sources` list (pipeline output); both are shown.
   function ruleBlock(rule) {
     if (typeof rule === 'string') rule = { name: rule };
     if (!rule || typeof rule !== 'object') return null;
-    const src = rule.source && typeof rule.source === 'object' ? rule.source : {};
-    const block = h('div', { class: 'rule' }, h('p', { class: 'rule-label', text: 'Нормативное основание' }));
-    const name = [rule.id, rule.name].filter((x) => x).join(' · ');
-    if (name) block.appendChild(h('p', { class: 'rule-name', text: name }));
-    const text = rule.summary || rule.interpretation || rule.description;
-    if (text) block.appendChild(h('p', { class: 'rule-text', text: String(text) }));
-    if (src.document) block.appendChild(h('p', { class: 'rule-doc', text: String(src.document) }));
-    if (src.clause) block.appendChild(h('p', { class: 'rule-clause', text: String(src.clause) }));
-    if (isHttpUrl(src.url)) {
-      let host = ''; try { host = new URL(src.url).hostname; } catch (e) { /* keep generic label */ }
-      block.appendChild(h('a', { class: 'rule-link', href: src.url, target: '_blank', rel: 'noopener noreferrer', text: host ? 'Открыть источник: ' + host : 'Открыть источник' }));
-    } else if (src.url) block.appendChild(h('p', { class: 'rule-clause', text: String(src.url) }));
-    return block.childNodes.length > 1 ? block : null;
+    const sources = Array.isArray(rule.sources) ? rule.sources : (rule.source ? [rule.source] : []);
+    const block = h('div', { class: 'rule' }, h('p', { class: 'rule-label', text: 'Нормативное основание' }),
+      line('rule-name', [rule.id, rule.name].filter((x) => x).join(' · ')),
+      line('rule-text', rule.summary || rule.interpretation || rule.description), ...sources.map(sourceBlock));
+    if (!sources.length) block.appendChild(line('rule-clause', 'Ссылка на нормативный документ не указана'));
+    return block;
   }
   const compactJson = (obj) => JSON.stringify(obj, (k, v) =>
     (k === 'image_base64' && typeof v === 'string' && v.length > 64 ? v.slice(0, 32) + '… [' + v.length + ' символов]' : v), 2);
   function violationCard(v, index) {
     v = v && typeof v === 'object' ? v : {};
-    const tc = toNum(v.timecode_sec);
-    const score = toNum(v.score != null ? v.score : v.confidence);
+    const r = v.rule && typeof v.rule === 'object' ? v.rule : {};
+    const tc = toNum(v.timecode_sec), tEnd = toNum(r.t_end_sec), score = toNum(r.score != null ? r.score : v.score);
+    const extra = [isFinite(tc) && isFinite(tEnd) && tEnd > tc ? 'событие ' + fmtNum(tc, 1) + '–' + fmtSeconds(tEnd) : '',
+      isFinite(score) ? 'оценка правила ' + fmtNum(score, 2) : ''].filter((x) => x).join(' · ');
     return h('article', { class: 'card' },
       h('header', { class: 'card-head' },
         h('h3', { class: 'card-type', text: (index + 1) + '. ' + (v.type || 'Иное') }),
-        h('span', { class: 'timecode', title: 'Таймкод начала события' }, isFinite(tc) ? fmtTime(tc) : 'таймкод не указан')),
+        h('span', { class: 'timecode', title: 'Таймкод начала события', text: isFinite(tc) ? fmtTime(tc) : 'таймкод не указан' })),
       h('p', { class: 'card-desc', text: v.description || 'Описание отсутствует' }),
-      isFinite(score) ? h('p', { class: 'score', text: 'Оценка уверенности: ' + fmtNum(score, 2) }) : null,
+      line('score', extra),
       framesBlock(Array.isArray(v.evidence_frames) ? v.evidence_frames : []),
       ruleBlock(v.rule),
       h('details', { class: 'raw' }, h('summary', { text: 'JSON нарушения' }), h('pre', { text: compactJson(v) })));
@@ -351,7 +305,7 @@
     const copyBtn = h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Скопировать' });
     copyBtn.addEventListener('click', () => copyText(full, copyBtn));
     const dlBtn = h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Скачать .json' });
-    dlBtn.addEventListener('click', () => download(full, 'result_' + jobId + '.json'));
+    dlBtn.addEventListener('click', () => download(full, 'result_' + jobId.replace(/[^\w.-]+/g, '_') + '.json'));
     return h('details', { class: 'raw raw-all' },
       h('summary', { text: 'Полный ответ API (JSON)' }),
       h('p', { class: 'hint', text: 'Строки image_base64 сокращены для чтения; копирование и скачивание отдают полный JSON.' }),
@@ -370,15 +324,13 @@
     ui.result.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
   }
 
-  // ---- Clipboard, download, modal ------------------------------------------------------------------
+  // ---- Clipboard, download, full-size frame viewer ----
   function flash(btn, label) { const old = btn.textContent; btn.textContent = label; setTimeout(() => { btn.textContent = old; }, 1500); }
   function copyText(text, btn) {
     const done = () => flash(btn, 'Скопировано');
-    const fallback = () => {
-      const ta = h('textarea', { class: 'visually-hidden', 'aria-hidden': 'true' });
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
+    const fallback = () => { // plain-http origins have no navigator.clipboard
+      const ta = document.body.appendChild(h('textarea', { class: 'visually-hidden', 'aria-hidden': 'true' }));
+      ta.value = text; ta.select();
       try { document.execCommand('copy'); done(); } catch (e) { flash(btn, 'Не удалось скопировать'); }
       document.body.removeChild(ta);
     };
@@ -387,37 +339,31 @@
   }
   function download(text, filename) {
     const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-    const a = h('a', { href: url, download: filename });
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const a = document.body.appendChild(h('a', { href: url, download: filename }));
+    a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function openModal(src, caption, opener) {
     state.lastFocus = opener || document.activeElement;
     ui.modalImg.src = src;
-    ui.modalImg.alt = caption;
-    ui.modalCaption.textContent = caption;
-    ui.modal.hidden = false;
-    document.body.classList.add('modal-open');
+    ui.modalImg.alt = ui.modalCaption.textContent = caption;
+    ui.modal.hidden = false; document.body.classList.add('modal-open');
     ui.modalClose.focus();
   }
   function closeModal() {
     if (ui.modal.hidden) return;
-    ui.modal.hidden = true;
-    ui.modalImg.removeAttribute('src');
-    document.body.classList.remove('modal-open');
-    if (state.lastFocus && state.lastFocus.focus) state.lastFocus.focus();
+    ui.modal.hidden = true; document.body.classList.remove('modal-open');
+    ui.modalImg.removeAttribute('src'); // release the decoded full-size image
+    if (state.lastFocus) state.lastFocus.focus();
   }
 
-  // ---- Wiring --------------------------------------------------------------------------------------
+  // ---- Wiring ----
   function bind() {
     ui.key.addEventListener('input', saveKey);
     ui.toggleKey.addEventListener('click', () => {
       const show = ui.key.type === 'password';
       ui.key.type = show ? 'text' : 'password';
-      ui.toggleKey.textContent = show ? 'Скрыть' : 'Показать';
-      ui.toggleKey.setAttribute('aria-pressed', String(show));
+      ui.toggleKey.textContent = show ? 'Скрыть' : 'Показать'; ui.toggleKey.setAttribute('aria-pressed', String(show));
     });
     // A programmatic input.click() bubbles back to the dropzone: ignore that echo to avoid recursion.
     ui.drop.addEventListener('click', (e) => { if (!state.busy && e.target !== ui.fileInput) ui.fileInput.click(); });

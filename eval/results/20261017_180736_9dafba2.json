@@ -1,0 +1,1892 @@
+{
+ "config": {
+  "device": "cpu",
+  "use_vlm": false,
+  "jobs": 6,
+  "tag": "rules v1",
+  "git_sha": "9dafba2",
+  "tolerances_sec": [
+   3.0,
+   5.0
+  ],
+  "videos_dir": "/shared/home/sagyndyk.sagadinov/datathon/data/open/videos"
+ },
+ "summary": {
+  "videos": 42,
+  "tp": 16,
+  "fn": 6,
+  "fp": 14,
+  "tn": 6,
+  "accuracy": 0.524,
+  "recall_violation": 0.727,
+  "precision_violation": 0.533,
+  "fp_on_clean": 14,
+  "fn_videos": [
+   1,
+   28,
+   30,
+   32,
+   44,
+   46
+  ],
+  "fp_videos": [
+   3,
+   5,
+   12,
+   14,
+   16,
+   19,
+   21,
+   23,
+   25,
+   27,
+   35,
+   37,
+   39,
+   48
+  ],
+  "timecode_scored": 16,
+  "timecode_mae": 5.97,
+  "timecode_median_abs": 4.25,
+  "hit_3s": 0.438,
+  "hit_5s": 0.625,
+  "type_acc_on_tp": 0.312,
+  "sec_mean": 11.5,
+  "sec_max": 155.0,
+  "errors": 0,
+  "wall_sec": 157.8
+ },
+ "rows": [
+  {
+   "n": 1,
+   "gt": "V",
+   "pred": "-",
+   "gt_t": 22.0,
+   "gt_type": "T7",
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 0,
+   "sec": 6.89,
+   "err": false,
+   "outcome": "FN"
+  },
+  {
+   "n": 2,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 10.0,
+   "gt_type": "T7",
+   "pred_t": 6.0,
+   "pred_type": "T4",
+   "dt": -4.0,
+   "hit3": false,
+   "hit5": true,
+   "type_ok": false,
+   "n_events": 1,
+   "sec": 6.95,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 3,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 3,
+   "sec": 6.99,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 4,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 57.0,
+   "gt_type": "T1",
+   "pred_t": 50.5,
+   "pred_type": "T3",
+   "dt": -6.5,
+   "hit3": false,
+   "hit5": false,
+   "type_ok": false,
+   "n_events": 3,
+   "sec": 7.21,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 5,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 4,
+   "sec": 155.01,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 8,
+   "gt": "-",
+   "pred": "-",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 0,
+   "sec": 6.94,
+   "err": false,
+   "outcome": "TN"
+  },
+  {
+   "n": 10,
+   "gt": "-",
+   "pred": "-",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 0,
+   "sec": 0.09,
+   "err": false,
+   "outcome": "TN"
+  },
+  {
+   "n": 11,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 18.0,
+   "gt_type": "T2",
+   "pred_t": 18.0,
+   "pred_type": "T2",
+   "dt": 0.0,
+   "hit3": true,
+   "hit5": true,
+   "type_ok": true,
+   "n_events": 2,
+   "sec": 0.15,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 12,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 3,
+   "sec": 0.24,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 13,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 47.0,
+   "gt_type": "T7",
+   "pred_t": 31.5,
+   "pred_type": "T9",
+   "dt": -15.5,
+   "hit3": false,
+   "hit5": false,
+   "type_ok": false,
+   "n_events": 1,
+   "sec": 0.34,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 14,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 4,
+   "sec": 145.37,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 15,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 15.0,
+   "gt_type": "T1",
+   "pred_t": 2.0,
+   "pred_type": "T9",
+   "dt": -13.0,
+   "hit3": false,
+   "hit5": false,
+   "type_ok": false,
+   "n_events": 1,
+   "sec": 0.12,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 16,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 2,
+   "sec": 0.15,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 17,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 7.0,
+   "gt_type": "T9",
+   "pred_t": 8.5,
+   "pred_type": "T9",
+   "dt": 1.5,
+   "hit3": true,
+   "hit5": true,
+   "type_ok": true,
+   "n_events": 1,
+   "sec": 0.09,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 18,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 20.0,
+   "gt_type": "T4",
+   "pred_t": 15.5,
+   "pred_type": "T4",
+   "dt": -4.5,
+   "hit3": false,
+   "hit5": true,
+   "type_ok": true,
+   "n_events": 1,
+   "sec": 0.14,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 19,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 1,
+   "sec": 0.33,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 20,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 5.0,
+   "gt_type": "T3",
+   "pred_t": 5.5,
+   "pred_type": "T3",
+   "dt": 0.5,
+   "hit3": true,
+   "hit5": true,
+   "type_ok": true,
+   "n_events": 1,
+   "sec": 0.07,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 21,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 1,
+   "sec": 0.12,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 22,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 14.0,
+   "gt_type": "T2",
+   "pred_t": 0.0,
+   "pred_type": "T5",
+   "dt": -14.0,
+   "hit3": false,
+   "hit5": false,
+   "type_ok": false,
+   "n_events": 1,
+   "sec": 0.12,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 23,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 1,
+   "sec": 0.11,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 24,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 8.0,
+   "gt_type": "T6",
+   "pred_t": 6.5,
+   "pred_type": "T6",
+   "dt": -1.5,
+   "hit3": true,
+   "hit5": true,
+   "type_ok": true,
+   "n_events": 4,
+   "sec": 0.12,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 25,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 3,
+   "sec": 0.21,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 26,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 9.0,
+   "gt_type": "T1",
+   "pred_t": 2.0,
+   "pred_type": "T9",
+   "dt": -7.0,
+   "hit3": false,
+   "hit5": false,
+   "type_ok": false,
+   "n_events": 1,
+   "sec": 0.13,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 27,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 2,
+   "sec": 0.17,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 28,
+   "gt": "V",
+   "pred": "-",
+   "gt_t": 7.0,
+   "gt_type": "T2",
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 0,
+   "sec": 0.1,
+   "err": false,
+   "outcome": "FN"
+  },
+  {
+   "n": 29,
+   "gt": "-",
+   "pred": "-",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 0,
+   "sec": 0.11,
+   "err": false,
+   "outcome": "TN"
+  },
+  {
+   "n": 30,
+   "gt": "V",
+   "pred": "-",
+   "gt_t": 13.0,
+   "gt_type": "T4",
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 0,
+   "sec": 0.11,
+   "err": false,
+   "outcome": "FN"
+  },
+  {
+   "n": 31,
+   "gt": "-",
+   "pred": "-",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 0,
+   "sec": 0.14,
+   "err": false,
+   "outcome": "TN"
+  },
+  {
+   "n": 32,
+   "gt": "V",
+   "pred": "-",
+   "gt_t": 5.0,
+   "gt_type": "T5",
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 0,
+   "sec": 0.13,
+   "err": false,
+   "outcome": "FN"
+  },
+  {
+   "n": 33,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 6.0,
+   "gt_type": "T5",
+   "pred_t": 10.5,
+   "pred_type": "T4",
+   "dt": 4.5,
+   "hit3": false,
+   "hit5": true,
+   "type_ok": false,
+   "n_events": 1,
+   "sec": 0.09,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 34,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 13.0,
+   "gt_type": "T8",
+   "pred_t": 11.0,
+   "pred_type": "T4",
+   "dt": -2.0,
+   "hit3": true,
+   "hit5": true,
+   "type_ok": false,
+   "n_events": 2,
+   "sec": 0.12,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 35,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 4,
+   "sec": 0.33,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 37,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 2,
+   "sec": 0.11,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 38,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 33.0,
+   "gt_type": "T1",
+   "pred_t": 35.0,
+   "pred_type": "T4",
+   "dt": 2.0,
+   "hit3": true,
+   "hit5": true,
+   "type_ok": false,
+   "n_events": 3,
+   "sec": 0.32,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 39,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 4,
+   "sec": 0.41,
+   "err": false,
+   "outcome": "FP"
+  },
+  {
+   "n": 40,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 17.0,
+   "gt_type": "T5",
+   "pred_t": 15.5,
+   "pred_type": "T9",
+   "dt": -1.5,
+   "hit3": true,
+   "hit5": true,
+   "type_ok": false,
+   "n_events": 1,
+   "sec": 0.13,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 43,
+   "gt": "-",
+   "pred": "-",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 0,
+   "sec": 0.12,
+   "err": false,
+   "outcome": "TN"
+  },
+  {
+   "n": 44,
+   "gt": "V",
+   "pred": "-",
+   "gt_t": 16.0,
+   "gt_type": "T7",
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 0,
+   "sec": 0.1,
+   "err": false,
+   "outcome": "FN"
+  },
+  {
+   "n": 45,
+   "gt": "-",
+   "pred": "-",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 0,
+   "sec": 0.18,
+   "err": false,
+   "outcome": "TN"
+  },
+  {
+   "n": 46,
+   "gt": "V",
+   "pred": "-",
+   "gt_t": 11.0,
+   "gt_type": "T6",
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 0,
+   "sec": 0.1,
+   "err": false,
+   "outcome": "FN"
+  },
+  {
+   "n": 47,
+   "gt": "V",
+   "pred": "V",
+   "gt_t": 68.0,
+   "gt_type": "T6",
+   "pred_t": 50.5,
+   "pred_type": "T3",
+   "dt": -17.5,
+   "hit3": false,
+   "hit5": false,
+   "type_ok": false,
+   "n_events": 3,
+   "sec": 0.39,
+   "err": false,
+   "outcome": "TP"
+  },
+  {
+   "n": 48,
+   "gt": "-",
+   "pred": "V",
+   "gt_t": null,
+   "gt_type": null,
+   "pred_t": null,
+   "pred_type": null,
+   "dt": null,
+   "hit3": null,
+   "hit5": null,
+   "type_ok": null,
+   "n_events": 4,
+   "sec": 141.43,
+   "err": false,
+   "outcome": "FP"
+  }
+ ],
+ "predictions": {
+  "1": {
+   "verdict": "no_violation",
+   "events": [],
+   "seconds": 6.89,
+   "timings": {
+    "frames": 0.017,
+    "detector_load": 6.75,
+    "detect": 0.004,
+    "timeline": 0.111,
+    "rules": 0.001,
+    "evidence": 0.0,
+    "total": 6.889
+   },
+   "error": null
+  },
+  "2": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 6.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 6.95,
+   "timings": {
+    "frames": 0.054,
+    "detector_load": 6.795,
+    "detect": 0.003,
+    "timeline": 0.077,
+    "rules": 0.001,
+    "evidence": 0.01,
+    "total": 6.947
+   },
+   "error": null
+  },
+  "3": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 1.5,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 3.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 12.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 6.99,
+   "timings": {
+    "frames": 0.033,
+    "detector_load": 6.836,
+    "detect": 0.004,
+    "timeline": 0.086,
+    "rules": 0.001,
+    "evidence": 0.028,
+    "total": 6.99
+   },
+   "error": null
+  },
+  "4": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 8.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 11.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 50.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 7.21,
+   "timings": {
+    "frames": 0.079,
+    "detector_load": 6.768,
+    "detect": 0.008,
+    "timeline": 0.325,
+    "rules": 0.002,
+    "evidence": 0.021,
+    "total": 7.21
+   },
+   "error": null
+  },
+  "5": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 0.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 4.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 17.5,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 58.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 155.01,
+   "timings": {
+    "frames": 0.051,
+    "detector_load": 6.745,
+    "detect": 147.919,
+    "timeline": 0.262,
+    "rules": 0.001,
+    "evidence": 0.026,
+    "total": 155.009
+   },
+   "error": null
+  },
+  "8": {
+   "verdict": "no_violation",
+   "events": [],
+   "seconds": 6.94,
+   "timings": {
+    "frames": 0.024,
+    "detector_load": 6.736,
+    "detect": 0.005,
+    "timeline": 0.165,
+    "rules": 0.001,
+    "evidence": 0.0,
+    "total": 6.937
+   },
+   "error": null
+  },
+  "10": {
+   "verdict": "no_violation",
+   "events": [],
+   "seconds": 0.09,
+   "timings": {
+    "frames": 0.013,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.068,
+    "rules": 0.0,
+    "evidence": 0.0,
+    "total": 0.087
+   },
+   "error": null
+  },
+  "11": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Уход с рабочего места без закрытия",
+     "type_id": "T2",
+     "t": 18.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 22.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.15,
+   "timings": {
+    "frames": 0.016,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.106,
+    "rules": 0.001,
+    "evidence": 0.016,
+    "total": 0.145
+   },
+   "error": null
+  },
+  "12": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 19.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 33.5,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 40.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.24,
+   "timings": {
+    "frames": 0.024,
+    "detector_load": 0.0,
+    "detect": 0.006,
+    "timeline": 0.176,
+    "rules": 0.001,
+    "evidence": 0.03,
+    "total": 0.242
+   },
+   "error": null
+  },
+  "13": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 31.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.34,
+   "timings": {
+    "frames": 0.035,
+    "detector_load": 0.0,
+    "detect": 0.007,
+    "timeline": 0.284,
+    "rules": 0.002,
+    "evidence": 0.01,
+    "total": 0.341
+   },
+   "error": null
+  },
+  "14": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Пересчёт без клиента",
+     "type_id": "T8",
+     "t": 39.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 49.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 51.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 57.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 145.37,
+   "timings": {
+    "frames": 0.065,
+    "detector_load": 0.0,
+    "detect": 145.001,
+    "timeline": 0.269,
+    "rules": 0.001,
+    "evidence": 0.027,
+    "total": 145.367
+   },
+   "error": null
+  },
+  "15": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 2.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.12,
+   "timings": {
+    "frames": 0.012,
+    "detector_load": 0.0,
+    "detect": 0.004,
+    "timeline": 0.093,
+    "rules": 0.001,
+    "evidence": 0.01,
+    "total": 0.123
+   },
+   "error": null
+  },
+  "16": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 7.5,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 17.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.15,
+   "timings": {
+    "frames": 0.015,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.105,
+    "rules": 0.001,
+    "evidence": 0.019,
+    "total": 0.146
+   },
+   "error": null
+  },
+  "17": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 8.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.09,
+   "timings": {
+    "frames": 0.009,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.065,
+    "rules": 0.001,
+    "evidence": 0.01,
+    "total": 0.09
+   },
+   "error": null
+  },
+  "18": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 15.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.14,
+   "timings": {
+    "frames": 0.014,
+    "detector_load": 0.0,
+    "detect": 0.004,
+    "timeline": 0.108,
+    "rules": 0.001,
+    "evidence": 0.009,
+    "total": 0.139
+   },
+   "error": null
+  },
+  "19": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 39.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.33,
+   "timings": {
+    "frames": 0.028,
+    "detector_load": 0.0,
+    "detect": 0.008,
+    "timeline": 0.28,
+    "rules": 0.002,
+    "evidence": 0.009,
+    "total": 0.33
+   },
+   "error": null
+  },
+  "20": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 5.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.07,
+   "timings": {
+    "frames": 0.008,
+    "detector_load": 0.0,
+    "detect": 0.002,
+    "timeline": 0.049,
+    "rules": 0.0,
+    "evidence": 0.009,
+    "total": 0.072
+   },
+   "error": null
+  },
+  "21": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 10.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.12,
+   "timings": {
+    "frames": 0.012,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.088,
+    "rules": 0.0,
+    "evidence": 0.011,
+    "total": 0.118
+   },
+   "error": null
+  },
+  "22": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Личные вещи в кассовом помещении",
+     "type_id": "T5",
+     "t": 0.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.12,
+   "timings": {
+    "frames": 0.014,
+    "detector_load": 0.0,
+    "detect": 0.004,
+    "timeline": 0.09,
+    "rules": 0.001,
+    "evidence": 0.008,
+    "total": 0.12
+   },
+   "error": null
+  },
+  "23": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Личные вещи в кассовом помещении",
+     "type_id": "T5",
+     "t": 1.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.11,
+   "timings": {
+    "frames": 0.012,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.079,
+    "rules": 0.001,
+    "evidence": 0.009,
+    "total": 0.106
+   },
+   "error": null
+  },
+  "24": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 0.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонние предметы / напитки на рабочем месте",
+     "type_id": "T6",
+     "t": 0.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 1.5,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонние предметы / напитки на рабочем месте",
+     "type_id": "T6",
+     "t": 6.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.12,
+   "timings": {
+    "frames": 0.01,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.071,
+    "rules": 0.001,
+    "evidence": 0.037,
+    "total": 0.125
+   },
+   "error": null
+  },
+  "25": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 0.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 0.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонние предметы / напитки на рабочем месте",
+     "type_id": "T6",
+     "t": 5.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.21,
+   "timings": {
+    "frames": 0.017,
+    "detector_load": 0.0,
+    "detect": 0.005,
+    "timeline": 0.159,
+    "rules": 0.001,
+    "evidence": 0.026,
+    "total": 0.212
+   },
+   "error": null
+  },
+  "26": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 2.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.13,
+   "timings": {
+    "frames": 0.012,
+    "detector_load": 0.0,
+    "detect": 0.004,
+    "timeline": 0.103,
+    "rules": 0.001,
+    "evidence": 0.011,
+    "total": 0.134
+   },
+   "error": null
+  },
+  "27": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 2.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 4.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.17,
+   "timings": {
+    "frames": 0.015,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.136,
+    "rules": 0.001,
+    "evidence": 0.016,
+    "total": 0.174
+   },
+   "error": null
+  },
+  "28": {
+   "verdict": "no_violation",
+   "events": [],
+   "seconds": 0.1,
+   "timings": {
+    "frames": 0.012,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.081,
+    "rules": 0.001,
+    "evidence": 0.0,
+    "total": 0.1
+   },
+   "error": null
+  },
+  "29": {
+   "verdict": "no_violation",
+   "events": [],
+   "seconds": 0.11,
+   "timings": {
+    "frames": 0.012,
+    "detector_load": 0.0,
+    "detect": 0.004,
+    "timeline": 0.087,
+    "rules": 0.001,
+    "evidence": 0.0,
+    "total": 0.107
+   },
+   "error": null
+  },
+  "30": {
+   "verdict": "no_violation",
+   "events": [],
+   "seconds": 0.11,
+   "timings": {
+    "frames": 0.013,
+    "detector_load": 0.0,
+    "detect": 0.005,
+    "timeline": 0.087,
+    "rules": 0.001,
+    "evidence": 0.0,
+    "total": 0.109
+   },
+   "error": null
+  },
+  "31": {
+   "verdict": "no_violation",
+   "events": [],
+   "seconds": 0.14,
+   "timings": {
+    "frames": 0.014,
+    "detector_load": 0.0,
+    "detect": 0.006,
+    "timeline": 0.112,
+    "rules": 0.001,
+    "evidence": 0.0,
+    "total": 0.136
+   },
+   "error": null
+  },
+  "32": {
+   "verdict": "no_violation",
+   "events": [],
+   "seconds": 0.13,
+   "timings": {
+    "frames": 0.014,
+    "detector_load": 0.0,
+    "detect": 0.004,
+    "timeline": 0.108,
+    "rules": 0.001,
+    "evidence": 0.0,
+    "total": 0.129
+   },
+   "error": null
+  },
+  "33": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 10.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.09,
+   "timings": {
+    "frames": 0.009,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.066,
+    "rules": 0.0,
+    "evidence": 0.01,
+    "total": 0.09
+   },
+   "error": null
+  },
+  "34": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 0.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 11.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.12,
+   "timings": {
+    "frames": 0.012,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.087,
+    "rules": 0.001,
+    "evidence": 0.018,
+    "total": 0.124
+   },
+   "error": null
+  },
+  "35": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 0.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 5.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 43.5,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 48.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.33,
+   "timings": {
+    "frames": 0.029,
+    "detector_load": 0.0,
+    "detect": 0.009,
+    "timeline": 0.254,
+    "rules": 0.001,
+    "evidence": 0.029,
+    "total": 0.325
+   },
+   "error": null
+  },
+  "37": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 0.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 6.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.11,
+   "timings": {
+    "frames": 0.01,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.076,
+    "rules": 0.001,
+    "evidence": 0.018,
+    "total": 0.111
+   },
+   "error": null
+  },
+  "38": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 0.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 6.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 35.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.32,
+   "timings": {
+    "frames": 0.029,
+    "detector_load": 0.0,
+    "detect": 0.01,
+    "timeline": 0.248,
+    "rules": 0.001,
+    "evidence": 0.025,
+    "total": 0.316
+   },
+   "error": null
+  },
+  "39": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 0.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 6.5,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 68.5,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 73.0,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.41,
+   "timings": {
+    "frames": 0.037,
+    "detector_load": 0.0,
+    "detect": 0.01,
+    "timeline": 0.326,
+    "rules": 0.002,
+    "evidence": 0.031,
+    "total": 0.409
+   },
+   "error": null
+  },
+  "40": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Нарушение при приёме инкассации",
+     "type_id": "T9",
+     "t": 15.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.13,
+   "timings": {
+    "frames": 0.013,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.098,
+    "rules": 0.001,
+    "evidence": 0.008,
+    "total": 0.127
+   },
+   "error": null
+  },
+  "43": {
+   "verdict": "no_violation",
+   "events": [],
+   "seconds": 0.12,
+   "timings": {
+    "frames": 0.013,
+    "detector_load": 0.0,
+    "detect": 0.004,
+    "timeline": 0.095,
+    "rules": 0.001,
+    "evidence": 0.0,
+    "total": 0.116
+   },
+   "error": null
+  },
+  "44": {
+   "verdict": "no_violation",
+   "events": [],
+   "seconds": 0.1,
+   "timings": {
+    "frames": 0.011,
+    "detector_load": 0.0,
+    "detect": 0.004,
+    "timeline": 0.077,
+    "rules": 0.0,
+    "evidence": 0.0,
+    "total": 0.096
+   },
+   "error": null
+  },
+  "45": {
+   "verdict": "no_violation",
+   "events": [],
+   "seconds": 0.18,
+   "timings": {
+    "frames": 0.016,
+    "detector_load": 0.0,
+    "detect": 0.006,
+    "timeline": 0.152,
+    "rules": 0.001,
+    "evidence": 0.0,
+    "total": 0.179
+   },
+   "error": null
+  },
+  "46": {
+   "verdict": "no_violation",
+   "events": [],
+   "seconds": 0.1,
+   "timings": {
+    "frames": 0.011,
+    "detector_load": 0.0,
+    "detect": 0.003,
+    "timeline": 0.084,
+    "rules": 0.001,
+    "evidence": 0.0,
+    "total": 0.102
+   },
+   "error": null
+  },
+  "47": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 8.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 11.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 50.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 0.39,
+   "timings": {
+    "frames": 0.035,
+    "detector_load": 0.0,
+    "detect": 0.009,
+    "timeline": 0.319,
+    "rules": 0.002,
+    "evidence": 0.021,
+    "total": 0.389
+   },
+   "error": null
+  },
+  "48": {
+   "verdict": "violation",
+   "events": [
+    {
+     "type": "Посторонний в кассовой зоне",
+     "type_id": "T4",
+     "t": 0.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 4.0,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 17.5,
+     "score": null,
+     "n_frames": 3
+    },
+    {
+     "type": "Открытый сейф",
+     "type_id": "T3",
+     "t": 58.5,
+     "score": null,
+     "n_frames": 3
+    }
+   ],
+   "seconds": 141.43,
+   "timings": {
+    "frames": 0.036,
+    "detector_load": 0.0,
+    "detect": 141.07,
+    "timeline": 0.288,
+    "rules": 0.001,
+    "evidence": 0.027,
+    "total": 141.425
+   },
+   "error": null
+  }
+ }
+}
