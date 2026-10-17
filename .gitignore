@@ -1,0 +1,23 @@
+# data, weights, logs, local env, downloaded binaries
+data/
+models/
+logs/
+.venv/
+bin/
+jobs/
+*.mov
+*.mp4
+# python
+__pycache__/
+*.pyc
+*.egg-info/
+# secrets / local config
+.env
+*.key
+ngrok.yml
+# editors
+.vscode/
+.idea/
+# keep eval results (small json) but not evidence dumps
+eval/results/*/
+docs/case/*.docx

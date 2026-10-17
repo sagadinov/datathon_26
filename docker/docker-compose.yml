@@ -1,0 +1,6 @@
+services:
+  api:
+    build: {context: .., dockerfile: docker/Dockerfile}
+    ports: ["8000:8000"]
+    volumes: ["../models:/app/models:ro"]
+    environment: [API_KEY=${API_KEY}, HF_HUB_OFFLINE=1, TRANSFORMERS_OFFLINE=1]

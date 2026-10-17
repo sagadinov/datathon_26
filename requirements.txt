@@ -1,0 +1,19 @@
+# torch/torchvision are installed separately from the CPU index (see scripts/setup_env.sh)
+transformers>=4.46,<4.50
+numpy>=1.26,<2.3
+opencv-python-headless>=4.10
+pillow>=10.4
+imageio-ffmpeg>=0.5
+openpyxl>=3.1
+pandas>=2.2
+tabulate>=0.9
+tqdm>=4.66
+pyyaml>=6.0
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-multipart>=0.0.12
+pydantic>=2.9
+requests>=2.32
+streamlit>=1.39
+supervision>=0.25
+scipy>=1.13
