@@ -1,11 +1,9 @@
-"""Open-vocabulary object detection with one backend-agnostic interface (CPU-first).
+"""Open-vocabulary object detection on CPU with Grounding DINO tiny (Apache-2.0), offline.
 
-Backends (all Apache-2.0, loaded offline from models/hf):
-  * "gdino" -> IDEA-Research/grounding-dino-tiny  (text prompt "a. b. c.")
-  * "owlv2" -> google/owlv2-base-patch16-ensemble (list of text queries)
-
-Our canonical vocabulary (VOCAB) maps a class id to one or more prompt phrases; the
-detector returns canonical ids, so the rule engine never sees backend-specific text.
+Why not the stock HF post-processing: it merges tokens of several prompt phrases into one
+label ("open safe door glass door"). Here every query box is scored per phrase (max sigmoid
+over that phrase's tokens) and assigned to the single best phrase, then class-wise NMS.
+The rule engine only ever sees canonical class ids from VOCAB, never raw text.
 """
 from __future__ import annotations
 
@@ -23,9 +21,10 @@ log = logging.getLogger("pipeline.detect")
 # canonical class -> prompt phrases (lowercase, no trailing period)
 VOCAB: dict[str, list[str]] = {
     "person": ["person"],
-    "cash": ["banknotes", "cash money", "stack of paper money"],
-    "money_bag": ["green money bag", "cash bag"],
-    "bag": ["handbag", "backpack", "shoulder bag"],
+    "hand": ["hand"],
+    "cash": ["banknotes", "cash", "stack of money"],
+    "money_bag": ["money bag", "cash bag"],
+    "bag": ["handbag", "backpack"],
     "cup": ["cup", "coffee cup", "drinking glass"],
     "jacket": ["jacket", "coat"],
     "laptop": ["laptop"],
@@ -37,19 +36,15 @@ VOCAB: dict[str, list[str]] = {
     "counter_machine": ["money counting machine"],
     "book": ["magazine", "book"],
 }
-
-MODEL_IDS = {
-    "gdino": "IDEA-Research/grounding-dino-tiny",
-    "owlv2": "google/owlv2-base-patch16-ensemble",
-}
+MODEL_ID = "IDEA-Research/grounding-dino-tiny"
 
 
 @dataclass
 class Detection:
-    label: str                        # canonical VOCAB key
+    label: str                                  # canonical VOCAB key
     score: float
-    box: tuple[float, float, float, float]  # x1, y1, x2, y2 in pixels of the input frame
-    phrase: str = ""                  # raw backend phrase (debugging only)
+    box: tuple[float, float, float, float]      # x1, y1, x2, y2 pixels in the input frame
+    phrase: str = ""                            # winning prompt phrase (debugging)
 
     @property
     def xyxy(self) -> np.ndarray:
@@ -65,90 +60,93 @@ class Detection:
         x1, y1, x2, y2 = self.box
         return max(0.0, x2 - x1) * max(0.0, y2 - y1)
 
+    def to_list(self) -> list:
+        return [self.label, round(self.score, 4), *[round(v, 1) for v in self.box], self.phrase]
 
-def _phrase_to_label(phrase: str, phrases: dict[str, str]) -> str:
-    """Map a backend phrase (possibly merged/partial) to the canonical class with max word overlap."""
-    if phrase in phrases:
-        return phrases[phrase]
-    words = set(phrase.split())
-    best, best_n = "unknown", 0
-    for p, label in phrases.items():
-        n = len(words & set(p.split()))
-        if n > best_n:
-            best, best_n = label, n
-    return best
+    @classmethod
+    def from_list(cls, row: list) -> "Detection":
+        return cls(row[0], float(row[1]), tuple(float(v) for v in row[2:6]), row[6] if len(row) > 6 else "")
 
 
 class Detector:
-    """Unified detector. `detect()` works on a BGR uint8 frame and returns canonical detections."""
+    """Grounding DINO with per-phrase scoring. `detect()` takes a BGR uint8 frame."""
 
-    def __init__(self, backend: str = "gdino", device: str = "cpu", vocab: dict[str, list[str]] | None = None,
-                 box_threshold: float = 0.25, text_threshold: float = 0.25, shortest_edge: int | None = None,
-                 threads: int | None = None):
-        self.backend, self.device = backend, device
+    def __init__(self, vocab: dict[str, list[str]] | None = None, box_threshold: float = 0.2,
+                 shortest_edge: int = 384, longest_edge: int = 640, nms_iou: float = 0.6,
+                 device: str = "cpu", threads: int | None = None):
+        from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
+
         self.vocab = vocab or VOCAB
-        self.box_threshold, self.text_threshold = box_threshold, text_threshold
-        self.phrases: dict[str, str] = {p: k for k, ps in self.vocab.items() for p in ps}
+        self.box_threshold, self.nms_iou, self.device = box_threshold, nms_iou, device
         if threads and device == "cpu":
             torch.set_num_threads(threads)
         t0 = time.perf_counter()
-        if backend == "gdino":
-            from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
+        self.processor = AutoProcessor.from_pretrained(MODEL_ID)
+        self.processor.image_processor.size = {"shortest_edge": shortest_edge, "longest_edge": longest_edge}
+        self.model = AutoModelForZeroShotObjectDetection.from_pretrained(MODEL_ID).to(device).eval()
+        self.phrases = [p.lower() for ps in self.vocab.values() for p in ps]
+        self.phrase_label = {p.lower(): k for k, ps in self.vocab.items() for p in ps}
+        self.text = ". ".join(self.phrases) + "."
+        self.token_phrase = self._token_phrase_index()
+        self.config = {"model": MODEL_ID, "shortest_edge": shortest_edge, "longest_edge": longest_edge,
+                       "box_threshold": box_threshold, "nms_iou": nms_iou, "phrases": self.phrases}
+        log.info("loaded %s in %.1fs (%d phrases)", MODEL_ID, time.perf_counter() - t0, len(self.phrases))
 
-            self.processor = AutoProcessor.from_pretrained(MODEL_IDS[backend])
-            if shortest_edge:
-                self.processor.image_processor.size = {"shortest_edge": shortest_edge,
-                                                       "longest_edge": int(shortest_edge * 1.67)}
-            self.model = AutoModelForZeroShotObjectDetection.from_pretrained(MODEL_IDS[backend])
-            self.text = ". ".join(self.phrases) + "."
-        elif backend == "owlv2":
-            from transformers import Owlv2ForObjectDetection, Owlv2Processor
-
-            self.processor = Owlv2Processor.from_pretrained(MODEL_IDS[backend])
-            self.model = Owlv2ForObjectDetection.from_pretrained(MODEL_IDS[backend])
-            self.queries = list(self.phrases)
-        else:
-            raise ValueError(f"unknown backend {backend}")
-        self.model.to(device).eval()
-        log.info("loaded %s (%s) in %.1fs", backend, MODEL_IDS[backend], time.perf_counter() - t0)
+    def _token_phrase_index(self) -> torch.Tensor:
+        """For each text token position, the phrase index it belongs to (-1 for separators/specials)."""
+        spans, pos = [], 0
+        for p in self.phrases:
+            start = self.text.index(p, pos)
+            spans.append((start, start + len(p)))
+            pos = start + len(p)
+        enc = self.processor.tokenizer(self.text, return_offsets_mapping=True)
+        idx = []
+        for (s, e) in enc["offset_mapping"]:
+            k = -1
+            if e > s:
+                for j, (ps, pe) in enumerate(spans):
+                    if ps <= s < pe:
+                        k = j
+                        break
+            idx.append(k)
+        return torch.tensor(idx)
 
     @torch.inference_mode()
-    def detect(self, image_bgr: np.ndarray) -> list[Detection]:
+    def detect_batch(self, images_bgr: list[np.ndarray]) -> list[list[Detection]]:
         from PIL import Image
+        from torchvision.ops import batched_nms
 
-        h, w = image_bgr.shape[:2]
-        pil = Image.fromarray(image_bgr[:, :, ::-1])
-        if self.backend == "gdino":
-            inputs = self.processor(images=pil, text=self.text, return_tensors="pt").to(self.device)
-            out = self.model(**inputs)
-            res = self.processor.post_process_grounded_object_detection(
-                out, inputs.input_ids, threshold=self.box_threshold, text_threshold=self.text_threshold,
-                target_sizes=[(h, w)])[0]
-            labels = res.get("text_labels") or res.get("labels")
-            return [Detection(_phrase_to_label(str(ph), self.phrases), float(s), tuple(b.tolist()), str(ph))
-                    for ph, s, b in zip(labels, res["scores"], res["boxes"])]
-        # owlv2: the processor pads the image to a square, so boxes live in a (side x side) frame
-        side = max(h, w)
-        inputs = self.processor(text=[self.queries], images=pil, return_tensors="pt").to(self.device)
+        pils = [Image.fromarray(im[:, :, ::-1]) for im in images_bgr]
+        inputs = self.processor(images=pils, text=[self.text] * len(pils), return_tensors="pt").to(self.device)
         out = self.model(**inputs)
-        res = self.processor.post_process_object_detection(
-            out, threshold=self.box_threshold, target_sizes=torch.tensor([[side, side]]))[0]
-        dets = []
-        for idx, s, b in zip(res["labels"], res["scores"], res["boxes"]):
-            phrase = self.queries[int(idx)]
-            x1, y1, x2, y2 = (float(v) for v in b.tolist())
-            box = (max(0.0, x1), max(0.0, y1), min(float(w), x2), min(float(h), y2))
-            dets.append(Detection(self.phrases[phrase], float(s), box, phrase))
-        return dets
-
-    def detect_many(self, frames, log_every: int = 20) -> list[list[Detection]]:
-        """Run `detect` over an iterable of frames (objects with .load()) with progress logging."""
-        results, t0 = [], time.perf_counter()
-        for i, f in enumerate(frames):
-            results.append(self.detect(f.load()))
-            if log_every and (i + 1) % log_every == 0:
-                log.info("detect %d frames, %.2fs/frame", i + 1, (time.perf_counter() - t0) / (i + 1))
+        probs = out.logits.sigmoid()                      # (B, Q, T)
+        boxes_n = out.pred_boxes                          # (B, Q, 4) normalised cxcywh
+        n_tok = min(probs.shape[-1], len(self.token_phrase))
+        tok_phrase = self.token_phrase[:n_tok]
+        results = []
+        for b, im in enumerate(images_bgr):
+            h, w = im.shape[:2]
+            per_phrase = torch.stack([probs[b, :, :n_tok][:, tok_phrase == j].max(dim=1).values
+                                      for j in range(len(self.phrases))], dim=1)   # (Q, P)
+            best_s, best_p = per_phrase.max(dim=1)
+            keep = best_s > self.box_threshold
+            if keep.sum() == 0:
+                results.append([])
+                continue
+            cx, cy, bw, bh = boxes_n[b][keep].unbind(-1)
+            xyxy = torch.stack([(cx - bw / 2) * w, (cy - bh / 2) * h, (cx + bw / 2) * w, (cy + bh / 2) * h], -1)
+            xyxy[:, 0::2] = xyxy[:, 0::2].clamp(0, w)
+            xyxy[:, 1::2] = xyxy[:, 1::2].clamp(0, h)
+            scores, ph = best_s[keep], best_p[keep]
+            cls = torch.tensor([list(self.vocab).index(self.phrase_label[self.phrases[int(j)]]) for j in ph])
+            kept = batched_nms(xyxy, scores, cls, self.nms_iou)
+            dets = [Detection(self.phrase_label[self.phrases[int(ph[i])]], float(scores[i]),
+                              tuple(float(v) for v in xyxy[i].tolist()), self.phrases[int(ph[i])]) for i in kept]
+            results.append(sorted(dets, key=lambda d: -d.score))
         return results
+
+    def detect(self, image_bgr: np.ndarray) -> list[Detection]:
+        return self.detect_batch([image_bgr])[0]
 
 
 def draw(image_bgr: np.ndarray, dets: list[Detection], min_score: float = 0.0) -> np.ndarray:
@@ -170,5 +168,5 @@ def draw(image_bgr: np.ndarray, dets: list[Detection], min_score: float = 0.0) -
 
 
 def _color(label: str) -> tuple[int, int, int]:
-    rng = np.random.default_rng(abs(hash(label)) % (2 ** 32))
+    rng = np.random.default_rng(sum(ord(c) * (i + 1) for i, c in enumerate(label)) % (2 ** 32))
     return tuple(int(v) for v in rng.integers(60, 255, 3))
