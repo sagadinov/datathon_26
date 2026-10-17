@@ -1,62 +1,132 @@
 """CLI / library entry point for analysing one video.
 
-    python -m src.pipeline.run video.mov --out out.json [--device cpu] [--no-vlm]
+    python -m src.pipeline.run video.mov --out out.json [--device cpu] [--no-vlm] [--time-budget 170]
 
-`analyze()` always returns a schema-valid result dict. Stages are added incrementally;
-right now it only extracts frames and returns `no_violation` (evaluation baseline).
+Stages: frames -> detections (disk cache, budget-aware frame stride) -> tracks/zones/timeline
+-> rules -> descriptions + evidence frames -> schema-valid JSON. Always returns a result.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import time
 from pathlib import Path
 
-from src.common import setup_logging, timed
-from src.pipeline.frames import extract_frames
+from src.common import CACHE_DIR, setup_logging, timed
+from src.pipeline import vlm
+from src.pipeline.describe import describe, rule_block
+from src.pipeline.detect_cache import cached_detections
+from src.pipeline.evidence import evidence_frames
+from src.pipeline.frames import FrameSet, extract_frames
+from src.pipeline.rules import Event, run_rules
+from src.pipeline.state import build_timeline
+from src.rules_catalog import RULES
 
 log = setup_logging("pipeline")
+_detector = None
+MAX_VIOLATIONS = int(os.environ.get("MAX_VIOLATIONS", "4"))
+SEC_PER_FRAME = float(os.environ.get("DET_SEC_PER_FRAME", "0.75"))
 
 
-def _limit_threads(device: str) -> None:
-    n = os.environ.get("TORCH_THREADS")
-    if device == "cpu" and n:
-        import torch
+def get_detector():
+    global _detector
+    if _detector is None:
+        from src.pipeline.detect import Detector
+        from src.pipeline.detect_cache import DET_KW
 
-        torch.set_num_threads(int(n))
+        threads = int(os.environ.get("TORCH_THREADS", "0")) or None
+        _detector = Detector(threads=threads, **DET_KW)
+    return _detector
 
 
-def analyze(
-    video_path: str | Path,
-    device: str = "cpu",
-    use_vlm: bool = False,
-    time_budget_sec: float = 180.0,
-) -> dict:
-    """Run the full pipeline on `video_path` and return the API result body (without job_id)."""
+def _subsample(frames: FrameSet, budget_left: float) -> FrameSet:
+    """Pick every k-th frame so that detection fits the remaining budget (k=1 when it already fits)."""
+    est = len(frames) * SEC_PER_FRAME
+    k = max(1, math.ceil(est / max(1.0, budget_left * 0.85)))
+    if k == 1:
+        return frames
+    picked = frames.frames[::k]
+    log.info("time budget: %d frames x %.2fs > %.0fs -> stride %d (%d frames)", len(frames), SEC_PER_FRAME,
+             budget_left, k, len(picked))
+    return FrameSet(frames.meta, frames.sample_fps / k, frames.long_side, picked)
+
+
+def merge_events(events: list[Event]) -> list[Event]:
+    """Merge same-type events that overlap or nearly touch; keep the strongest few, one per type first."""
+    merged: list[Event] = []
+    for ev in sorted(events, key=lambda e: (e.type_id, e.t_start)):
+        last = merged[-1] if merged else None
+        if last and last.type_id == ev.type_id and ev.t_start <= last.t_end + 2.0:
+            last.t_end = max(last.t_end, ev.t_end)
+            last.score = max(last.score, ev.score)
+        else:
+            merged.append(Event(ev.type_id, ev.t_start, ev.t_end, ev.score, ev.frame_idx, dict(ev.details)))
+    by_type: dict[str, Event] = {}
+    for ev in merged:
+        if ev.type_id not in by_type or ev.score > by_type[ev.type_id].score:
+            by_type[ev.type_id] = ev
+    first = sorted(by_type.values(), key=lambda e: -e.score)[:MAX_VIOLATIONS]
+    rest = [e for e in merged if e not in first]
+    out = first + sorted(rest, key=lambda e: -e.score)[: max(0, MAX_VIOLATIONS - len(first))]
+    return sorted(out, key=lambda e: e.t_start)
+
+
+def _write_partial(path: Path | None, result: dict) -> None:
+    if path:
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(result, ensure_ascii=False))
+        tmp.replace(path)
+
+
+def analyze(video_path: str | Path, device: str = "cpu", use_vlm: bool = False,
+            time_budget_sec: float = 170.0, partial_path: Path | None = None, cache: bool = True) -> dict:
+    """Run the full pipeline and return the API result body (without job_id)."""
     t_start = time.perf_counter()
-    _limit_threads(device)
     timings: dict[str, float] = {}
     video_path = Path(video_path)
-    log.info("analyze %s device=%s vlm=%s", video_path.name, device, use_vlm)
+    log.info("analyze %s device=%s vlm=%s budget=%.0fs", video_path.name, device, use_vlm, time_budget_sec)
+    result = {"verdict": "no_violation", "violations": []}
 
     with timed(log, "frames", timings):
         frames = extract_frames(video_path)
+    _write_partial(partial_path, {**result, "note": "partial: frames only"})
 
-    violations: list[dict] = []  # filled by detect -> track -> zones -> rules -> vlm -> evidence
+    with timed(log, "detector_load", timings):
+        det = get_detector()
+    left = time_budget_sec - (time.perf_counter() - t_start) - 12.0
+    sub = _subsample(frames, left)
+    with timed(log, "detect", timings):
+        kw = {} if sub is frames else {"cache_dir": CACHE_DIR / f"detections_stride"}
+        dets = cached_detections(sub, det, **kw) if cache else cached_detections(sub, det, cache_dir=Path("/nonexistent"))
+    with timed(log, "timeline", timings):
+        tl = build_timeline(sub, dets)
+    with timed(log, "rules", timings):
+        events = merge_events(run_rules(tl))
+    log.info("events: %s", [(e.type_id, round(e.t_start, 1), round(e.t_end, 1), round(e.score, 2)) for e in events])
 
+    violations = []
+    with timed(log, "evidence", timings):
+        for ev in events:
+            frames_b64 = evidence_frames(sub, tl, ev)
+            desc = describe(ev)
+            if use_vlm and vlm.available():
+                ans = vlm.confirm([f["image_base64"] for f in frames_b64],
+                                  f"Опиши в двух предложениях по-русски только то, что видно на кадрах. "
+                                  f"Подтверди или опровергни: {desc}")
+                if ans and ans.get("description"):
+                    desc = ans["description"]
+            violations.append({"type": RULES.get(ev.type_id, RULES["T0"]).name, "timecode_sec": round(ev.t_start, 1),
+                               "description": desc, "evidence_frames": frames_b64, "rule": rule_block(ev)})
+    result = {"verdict": "violation" if violations else "no_violation", "violations": violations}
     timings["total"] = round(time.perf_counter() - t_start, 3)
-    return {
-        "verdict": "violation" if violations else "no_violation",
-        "violations": violations,
-        "_debug": {
-            "device": device,
-            "use_vlm": use_vlm,
-            "n_frames": len(frames),
-            "duration_sec": frames.meta.duration_sec,
-            "timings": timings,
-        },
-    }
+    result["_debug"] = {"device": device, "use_vlm": use_vlm, "n_frames": len(frames), "n_detected": len(sub),
+                        "duration_sec": frames.meta.duration_sec, "timings": timings,
+                        "layout": {k: v for k, v in tl.layout.to_dict().items() if k != "presence"},
+                        "events": [{"type": e.type_id, "t_start": round(e.t_start, 1), "t_end": round(e.t_end, 1),
+                                    "score": round(e.score, 2), "details": e.details} for e in events]}
+    return result
 
 
 def main() -> None:
@@ -69,7 +139,9 @@ def main() -> None:
     ap.add_argument("--time-budget", type=float, default=170.0, help="seconds; partial result after it")
     args = ap.parse_args()
 
-    result = analyze(args.video, device=args.device, use_vlm=not args.no_vlm, time_budget_sec=args.time_budget)
+    partial = Path(args.out + ".partial.json") if args.out else None
+    result = analyze(args.video, device=args.device, use_vlm=not args.no_vlm, time_budget_sec=args.time_budget,
+                     partial_path=partial)
     if not args.keep_debug:
         result.pop("_debug", None)
     text = json.dumps(result, ensure_ascii=False, indent=2)
@@ -77,6 +149,8 @@ def main() -> None:
         tmp = Path(args.out).with_suffix(".tmp")
         tmp.write_text(text)
         tmp.replace(args.out)
+        if partial and partial.exists():
+            partial.unlink()
         log.info("wrote %s", args.out)
     else:
         print(text)

@@ -1,6 +1,26 @@
+# UNTESTED (no Docker on the cluster) - see docs/HOWTO.md, section "Docker".
+# From this directory:   docker compose up -d --build
+# Secrets/config come from ../.env (API_KEY, WORKERS, TORCH_THREADS, TIME_BUDGET_SEC, MAX_UPLOAD_MB).
+# Host port: API_PORT in the shell environment (default 8000); the container always listens on 8000.
 services:
   api:
-    build: {context: .., dockerfile: docker/Dockerfile}
-    ports: ["8000:8000"]
-    volumes: ["../models:/app/models:ro"]
-    environment: [API_KEY=${API_KEY}, HF_HUB_OFFLINE=1, TRANSFORMERS_OFFLINE=1]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: datathon-cashier-api:cpu
+    container_name: cashier-api
+    env_file:
+      - ../.env
+    environment:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      JOBS_DIR: /app/jobs
+      PORT: "8000"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ../models:/app/models:ro
+      - ../jobs:/app/jobs
+      - ../logs:/app/logs
+      - ../cache:/app/cache
+    restart: unless-stopped

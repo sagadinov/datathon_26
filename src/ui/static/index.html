@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Проверка видеозаписи с камеры кассы на признаки нарушений кассовой дисциплины">
+  <title>ForteBank: контроль кассовой дисциплины</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1><span class="brand">ForteBank</span>: контроль кассовой дисциплины по видео</h1>
+      <p class="subtitle">Загрузите запись с камеры кассы. Сервис проанализирует её локально и покажет признаки
+        возможных нарушений: таймкод, кадры и нормативное основание (акты НБРК, adilet.zan.kz).</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="panel" aria-labelledby="h-check">
+      <h2 id="h-check" class="visually-hidden">Проверка видео</h2>
+
+      <div class="field">
+        <label for="api-key">API-ключ</label>
+        <div class="key-row">
+          <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="значение заголовка X-API-Key">
+          <button type="button" id="toggle-key" class="btn btn-ghost" aria-pressed="false">Показать</button>
+        </div>
+        <p class="hint">Ключ сохраняется только в этом браузере.</p>
+      </div>
+
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Выбрать видеофайл">
+        <input id="file-input" type="file" accept=".mov,.mp4,video/quicktime,video/mp4" hidden>
+        <p class="dz-title">Перетащите видео сюда или <span class="link">выберите файл</span></p>
+        <p class="hint">Форматы .mov и .mp4. Одна камера, одна касса; обработка занимает до 3 минут.</p>
+      </div>
+
+      <div id="file-info" class="file-info" hidden>
+        <span id="file-name" class="file-name"></span>
+        <span id="file-size" class="file-size"></span>
+        <button type="button" id="file-clear" class="btn btn-ghost btn-sm">Убрать</button>
+      </div>
+
+      <div class="actions">
+        <button type="button" id="submit" class="btn btn-primary" disabled>Проверить</button>
+        <button type="button" id="cancel" class="btn btn-ghost" hidden>Отменить</button>
+      </div>
+    </section>
+
+    <section id="status" class="status" role="status" aria-live="polite" hidden></section>
+    <section id="result" class="result" aria-label="Результат проверки" hidden></section>
+  </main>
+
+  <footer class="wrap footer">
+    <p>Анализ выполняется локально, без облачных сервисов. Лица не распознаются: люди учитываются
+      только как «человек в кадре».</p>
+  </footer>
+
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-label="Кадр в полном размере" hidden>
+    <button type="button" id="modal-close" class="modal-close" aria-label="Закрыть">&times;</button>
+    <figure class="modal-figure">
+      <img id="modal-img" alt="">
+      <figcaption id="modal-caption"></figcaption>
+    </figure>
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 """Dataset evaluation over data/open: verdict, timecode, type metrics and per-video timings.
 
     python -m eval.evaluate [--device cpu] [--no-vlm] [--jobs 8] [--only 4,20,18] [--limit N]
+                            [--videos-dir data/aug/hflip/videos]   # robustness variants, same labels
 
 Writes eval/results/<timestamp>_<git-sha>.json and prints a per-video table + summary.
 """
@@ -20,7 +21,7 @@ from pathlib import Path
 
 from tabulate import tabulate
 
-from eval.labels import Label, load_labels
+from eval.labels import VIDEOS_DIR, Label, load_labels
 from src.common import ROOT
 from src.rules_catalog import type_id
 
@@ -108,9 +109,17 @@ def main() -> None:
     ap.add_argument("--only", default=None, help="comma-separated video numbers, e.g. 4,20,18")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--tag", default="", help="free-text tag stored in the result file")
+    ap.add_argument("--videos-dir", default=None,
+                    help="folder with X-N.mov files instead of data/open/videos (e.g. data/aug/hflip/videos); "
+                         "labels still come from open_labels.xlsx, matched by number N")
     args = ap.parse_args()
 
-    labels = [l for l in load_labels() if l.video is not None]
+    videos_dir = Path(args.videos_dir) if args.videos_dir else VIDEOS_DIR
+    if not videos_dir.is_absolute() and not videos_dir.exists():
+        videos_dir = ROOT / videos_dir
+    if not videos_dir.is_dir():
+        sys.exit(f"videos dir not found: {videos_dir}")
+    labels = [l for l in load_labels(videos_dir=videos_dir) if l.video is not None]
     if args.only:
         wanted = {int(x) for x in args.only.split(",")}
         labels = [l for l in labels if l.n in wanted]
@@ -118,7 +127,8 @@ def main() -> None:
         labels = labels[: args.limit]
     if not labels:
         sys.exit("no videos matched")
-    print(f"evaluating {len(labels)} videos, device={args.device}, vlm={not args.no_vlm}, jobs={args.jobs}")
+    print(f"evaluating {len(labels)} videos from {videos_dir}, device={args.device}, vlm={not args.no_vlm}, "
+          f"jobs={args.jobs}")
 
     tasks = [(str(l.video), args.device, not args.no_vlm) for l in labels]
     t0 = time.perf_counter()
@@ -144,7 +154,7 @@ def main() -> None:
     out = RESULTS_DIR / f"{datetime.now():%Y%m%d_%H%M%S}_{git_sha()}.json"
     out.write_text(json.dumps({
         "config": {"device": args.device, "use_vlm": not args.no_vlm, "jobs": args.jobs, "tag": args.tag,
-                   "git_sha": git_sha(), "tolerances_sec": TOL},
+                   "git_sha": git_sha(), "tolerances_sec": TOL, "videos_dir": str(videos_dir)},
         "summary": summary, "rows": rows,
         "predictions": {l.n: p for l, p in zip(labels, preds)},
     }, ensure_ascii=False, indent=1))
