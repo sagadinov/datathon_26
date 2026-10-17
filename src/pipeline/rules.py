@@ -17,10 +17,10 @@ CFG = {
     "cash_thr": 0.30, "valuables_k": 2, "cup_enter": 0.40, "cup_hold": 0.30, "book_thr": 0.40,
     "items_thr": 0.35, "items_k": 3, "away_gap": 0.10,
     "T1A_min_s": 3.5, "T1B_static_s": 4.0, "T1B_noclient_s": 2.0,
-    "T2_min_s": 3.0, "T2_absent_s": 8.0, "T3_min_s": 2.0, "T4_min_s": 2.0, "T4b_min_s": 1.5,
+    "T2_min_s": 3.0, "T2_absent_s": 8.0, "T3_min_s": 3.0, "T4_min_s": 2.0, "T4b_min_s": 2.5,
     "T5_window_s": 20.0, "T6_min_s": 1.5, "T6_ctx_s": 5.0, "T7_gone_s": 1.5, "T7_hidden_s": 1.5,
     "T8_client_s": 3.0, "T8_window_s": 10.0, "T8_count_s": 2.0, "T9_leave_s": 10.0, "T9_stay_s": 2.0,
-    "T10_dwell_s": 1.0, "T10_reach_s": 10.0,
+    "T10_dwell_s": 4.0, "T10_reach_s": 10.0,
 }
 
 
@@ -75,15 +75,27 @@ class Series:
         self.present = [s.cashier_present for s in F]
         self.vacated = [s.seat_vacated for s in F]
         self.cashier_gap = [next((p.desk_gap for p in s.persons if p.is_cashier and p.in_room), 9.0) for s in F]
+        safe = tl.layout.safe
+        def near_safe(s):
+            b = s.cashier_box
+            if not safe or b is None or not s.seat_vacated:
+                return False
+            sw = safe[2] - safe[0]
+            dx = max(safe[0] - b[2], b[0] - safe[2], 0.0)
+            return dx <= 0.5 * sw and min(b[3], safe[3]) > max(b[1], safe[1])
         self.attending = [s.attending_safe for s in F]
+        self.items_left = [any(o.label in ("cup", "book") and o.on_desk and not o.masked and o.score >= 0.33
+                               for o in s.objects) for s in F]
         self.counting = [s.hand_at_counter for s in F]
-        self.away = fill_gaps([((not pr) or (va and gap > cfg["away_gap"])) and not at and not cnt
+        self.away = fill_gaps([((not pr) or va) and not at and not cnt
                                for pr, va, gap, at, cnt in zip(self.present, self.vacated, self.cashier_gap,
                                                               self.attending, self.counting)], 1)
         self.others_at_desk = [s.n_clients_at_desk for s in F]
         self.visitors = [sum(1 for p in s.persons if p.in_room and not p.is_cashier) for s in F]
         self.visitor_near = [sum(1 for p in s.persons if p.in_room and not p.is_cashier and p.desk_gap <= 0.3) for s in F]
-        self.intruder = [any(p.in_room and not p.is_cashier and p.seat_iou >= 0.15 for p in s.persons) for s in F]
+        self.intruder = [any(p.in_room and not p.is_cashier and not p.far_side and p.at_desk and p.seat_iou >= 0.10 for p in s.persons) for s in F]
+        self.seated = [s.cashier_present and not s.seat_vacated for s in F]
+        self.hands_seen = [s.hands_visible > 0 for s in F]
         self.n_in_room = [s.n_in_room for s in F]
         self.hands_hidden = [s.hands_visible == 0 for s in F]
         self.cash_in_hand = [s.cash_in_hand for s in F]
@@ -174,7 +186,7 @@ def rule_t2(S: Series) -> list[Event]:
         win = range(win_a, S.n)
         lit = sum(S.screen_lit[i] for i in win) >= 0.5 * len(win) if len(win) else False
         dark_on = any(S.lights_off[i] and S.screen_active[i] for i in win)
-        items = sum(S.cup[i] or S.book[i] for i in win) >= 0.8 * len(win) if len(win) else False
+        items = sum(S.items_left[i] for i in win) >= 0.6 * len(win) if len(win) else False
         if not (lit or dark_on or items):
             continue
         why = "screen" if (lit or dark_on) else "items"
@@ -190,7 +202,15 @@ def rule_t3(S: Series) -> list[Event]:
     """Safe door open while nobody attends the safe."""
     if S.tl.layout.safe is None:
         return []
-    mask = fill_gaps([d and not at for d, at in zip(S.door_open, S.attending)], 1)
+    safe = S.tl.layout.safe
+    def near_safe(s):
+        b = s.cashier_box
+        if b is None or not s.seat_vacated:
+            return False
+        sw = safe[2] - safe[0]
+        dx = max(safe[0] - b[2], b[0] - safe[2], 0.0)
+        return dx <= 0.75 * sw and min(b[3], safe[3]) > max(b[1], safe[1])
+    mask = fill_gaps([d and not at and not near_safe(s) for d, at, s in zip(S.door_open, S.attending, S.tl.frames)], 1)
     out = []
     for a, b in _runs_min(mask, S, S.cfg["T3_min_s"]):
         best = max(range(a, b), key=lambda i: S.tl.frames[i].safe_score)
@@ -202,11 +222,11 @@ def rule_t4(S: Series) -> list[Event]:
     """(a) two visitors at once while the cashier works; (b) a visitor on the cashier's side."""
     out = []
     k = S.sec(S.cfg["T4_min_s"])
-    mask = [v >= 2 and pr for v, pr in zip(S.visitors, S.present)]
+    mask = [vn >= 2 and pr for vn, pr in zip(S.visitor_near, S.present)]
     for a, b in runs(fill_gaps(mask, 1)):
         if b - a < k:
             continue
-        first_near = next((i for i in range(a, b) if S.visitor_near[i] >= 2), a)
+        first_near = a
         out.append(_event(S, "T4", first_near, b, 0.75, {"variant": "a", "persons": 2 + 1},
                           [a, first_near, min(S.n - 1, first_near + S.sec(2.0))]))
     mask_b = [intr and pr for intr, pr in zip(S.intruder, S.present)]
@@ -221,19 +241,24 @@ def rule_t5(S: Series) -> list[Event]:
     """Someone enters and leaves a personal bag / jacket on the desk."""
     out = []
     entries = [S._t_to_i(t) for t, _ in S.tl.entered]
-    if S.tl.room_empty_start:
-        first_in = next((i for i, s in enumerate(S.tl.frames) if s.n_in_room > 0), None)
-        if first_in is not None:
-            entries.append(first_in)
+    first_c = next((i for i, s in enumerate(S.tl.frames) if any(p.is_cashier and p.in_room for p in s.persons)), None)
+    if first_c is not None:
+        gap0 = next((p.desk_gap for p in S.tl.frames[first_c].persons if p.is_cashier), 0.0)
+        if gap0 > 0.3 and (S.tl.room_empty_start or first_c <= S.sec(10.0)):
+            entries.append(first_c)
     if not entries:
         return out
     win = S.sec(S.cfg["T5_window_s"])
-    for a, b in runs(S.items):
+    labels = {"bag", "jacket", "money_bag"}
+    series = S.new_obj(labels, S.cfg["items_thr"], S.cfg["items_k"])
+    for a, b in runs(series):
         if not any(0 <= a - e <= win for e in entries):
             continue
-        obj = S.obj_boxes(a, {"bag", "money_bag", "jacket", "book"}, S.cfg["items_thr"])
-        label = max(obj, key=lambda o: o.score).label if obj else "bag"
         start = max(0, a - (S.cfg["items_k"] - 1))
+        if any(S.others_at_desk[max(0, start - 2):start + 3]):
+            continue
+        obj = S.obj_boxes(a, labels, S.cfg["items_thr"])
+        label = max(obj, key=lambda o: o.score).label if obj else "bag"
         out.append(_event(S, "T5", start, b, 0.65, {"object": "bag" if label in ("bag", "money_bag") else label},
                           [max(0, start - S.sec(3.0)), start, b - 1]))
     return out
@@ -257,16 +282,16 @@ def rule_t7(S: Series) -> list[Event]:
     out, fps = [], S.tl.sample_fps
     gone_k, hid_k = S.sec(S.cfg["T7_gone_s"]), S.sec(S.cfg["T7_hidden_s"])
     # A
-    for a, b in runs(fill_gaps(S.cash_in_hand, 1)):
-        if b - a < 2:
+    for a, b in (runs(fill_gaps(S.cash_in_hand, 1)) if S.cfg.get("T7_A", False) else []):
+        if b - a < 3 or not any(S.seated[a:b]) or not any(S.hands_seen[a:b]):
             continue
         horizon = min(S.n, b + S.sec(3.0))
-        no_cash = [not S.cash_desk[i] and S.others_at_desk[i] == 0 for i in range(b, horizon)]
-        hidden = [S.hands_hidden[i] and not S.counting[i] for i in range(b, horizon)]
+        no_cash = [not S.cash_desk[i] and S.others_at_desk[i] == 0 and not S.cash_in_hand[i] for i in range(b, horizon)]
+        hidden = [S.hands_hidden[i] and not S.counting[i] and S.seated[i] for i in range(b, horizon)]
         if sum(no_cash) >= gone_k and any(sum(hidden[j:j + hid_k]) >= hid_k for j in range(max(1, len(hidden) - hid_k + 1))):
             out.append(_event(S, "T7", b - 1, horizon, 0.55, {"variant": "A"}, [b - 1, min(S.n - 1, b + 1), min(S.n - 1, b + S.sec(2.0))]))
-    # B
-    for a, b in runs(S.cash_desk):
+    # B (disabled by default: desk cash is rarely detected and the variant fired on clean videos)
+    for a, b in (runs(S.cash_desk) if S.cfg.get("T7_B", False) else []):
         if b - a < S.sec(10.0) or b >= S.n - 1:
             continue
         gone = all(not S.cash_desk[i] for i in range(b, min(S.n, b + 3)))
@@ -275,9 +300,18 @@ def rule_t7(S: Series) -> list[Event]:
         w0, w1 = max(0, b - S.sec(1.5)), min(S.n, b + S.sec(1.5))
         if any(S.others_at_desk[w0:w1]) or any(S.door_open[w0:w1]) or any(S.attending[w0:w1]) or any(S.counting[w0:w1]):
             continue
+        if not all(S.seated[w0:w1]) or any(S.lights_off[w0:w1]):
+            continue
+        last = S.obj_boxes(b - 1, {"cash"}, S.cfg["cash_thr"])
+        cb = S.tl.frames[b].cashier_box
+        if last and cb is not None:
+            ob = max(last, key=lambda o: o.score).box
+            ex = (ob[0] - 0.5 * (ob[2] - ob[0]), ob[1] - 0.5 * (ob[3] - ob[1]), ob[2] + 0.5 * (ob[2] - ob[0]), ob[3] + 0.5 * (ob[3] - ob[1]))
+            if inter_area(ex, cb) > 0:
+                continue   # the cashier's body covers the spot: occlusion, not disappearance
         out.append(_event(S, "T7", b, min(S.n, b + S.sec(2.0)), 0.55, {"variant": "B"}, [b - 1, b, min(S.n - 1, b + S.sec(1.5))]))
-    # C
-    for a, b in runs([cih and va for cih, va in zip(S.cash_in_hand, S.vacated)]):
+    # C (disabled: too many false alarms without a pose model; kept for VLM-backed runs)
+    for a, b in ([] if not S.cfg.get("T7_C", False) else runs([cih and va for cih, va in zip(S.cash_in_hand, S.vacated)])):
         if b - a < S.sec(2.0) or any(S.counting[max(0, a - S.sec(10.0)):a]):
             continue
         if any(S.cash_desk[max(0, a - S.sec(5.0)):a]) and not S.cash_desk[a]:
@@ -335,11 +369,18 @@ def rule_t10(S: Series) -> list[Event]:
     first = next((i for i, s in enumerate(tl.frames) if any(p.is_cashier and p.in_room for p in s.persons)), None)
     if first is None or first == 0:
         return []
-    before = [any(p.is_cashier and p.at_door for p in tl.frames[j].persons) for j in range(max(0, first - 3), first)]
+    cid = tl.cashier_track_id
+    before = [any(p.track_id == cid and p.at_door for p in tl.frames[j].persons) for j in range(max(0, first - 4), first)]
     if not any(before):
         return []
+    # dwell = frames after crossing during which the cashier has not yet moved towards the desk/camera
+    H = tl.layout.frame_h
+    b0 = tl.frames[first].cashier_box
     dwell = 0
-    while first + dwell < S.n and any(p.is_cashier and p.at_door for p in tl.frames[first + dwell].persons):
+    while first + dwell < S.n:
+        b = tl.frames[first + dwell].cashier_box
+        if b is None or b0 is None or b[1] >= b0[1] + 0.05 * H:
+            break
         dwell += 1
     if dwell > S.sec(S.cfg["T10_dwell_s"]):
         return []

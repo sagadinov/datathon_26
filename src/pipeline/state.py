@@ -148,8 +148,8 @@ def build_timeline(frames: FrameSet, dets_per_frame: list[list[Detection]], with
     tl = Timeline(layout, states, tracks, frames.sample_fps, cashier_track_id=cm.track_id, exit_t=cm.exit_t,
                   entered=roles.entered, left=roles.left, room_empty_start=cm.room_empty_start)
     if scr is not None:
-        tl.lights_off_events = screen.lights_off_events(scr)
-        tl.lock_events = screen.lock_events(scr, cm)
+        tl.lights_off_events = [i / frames.sample_fps for i in screen.lights_off_events(scr)]
+        tl.lock_events = [i / frames.sample_fps for i in screen.lock_events(scr, cm)]
     return tl
 
 
