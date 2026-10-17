@@ -31,16 +31,21 @@ def main() -> None:
     ap.add_argument("--per-video", type=int, default=5)
     ap.add_argument("--box-threshold", type=float, default=0.25)
     ap.add_argument("--shortest-edge", type=int, default=None)
+    ap.add_argument("--windows", default=None, help='override, e.g. "4:57-63,26:9-13"')
     args = ap.parse_args()
     setup_logging("debug_detect")
 
+    windows = WINDOWS
+    if args.windows:
+        windows = {int(w.split(":")[0]): (float(w.split(":")[1].split("-")[0]), float(w.split(":")[1].split("-")[1]), "custom")
+                   for w in args.windows.split(",")}
     det = Detector(args.backend, threads=args.threads, box_threshold=args.box_threshold,
                    shortest_edge=args.shortest_edge)
     out_dir = LOGS_DIR / "debug" / args.backend
     out_dir.mkdir(parents=True, exist_ok=True)
     videos = index_videos()
     tiles, total_s, total_n = [], 0.0, 0
-    for n, (t0, t1, note) in WINDOWS.items():
+    for n, (t0, t1, note) in windows.items():
         fs = extract_frames(videos[n])
         step = max(1, int((t1 - t0) * fs.sample_fps // args.per_video))
         picks = [f for f in fs if t0 <= f.timestamp_sec <= t1][::step][: args.per_video]
