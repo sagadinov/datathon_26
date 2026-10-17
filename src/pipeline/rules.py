@@ -56,7 +56,7 @@ class Series:
         self.bag_desk = self.new_obj({"money_bag", "bag"}, cfg["cash_thr"], cfg["items_k"])
         self.items = self.new_obj({"bag", "money_bag", "jacket", "book"}, cfg["items_thr"], cfg["items_k"])
         self.cash_ctx = [any(o.label == "cash" and o.is_event_object and o.on_desk and o.score >= 0.40 for o in s.objects)
-                         or s.cash_in_hand for s in F]
+                         for s in F]
         cash_boxes = [[o.box for o in s.objects if o.label == "cash" and o.score >= 0.3] for s in F]
 
         def cup_ok(o, s):
@@ -68,7 +68,7 @@ class Series:
             if any(_box_iou(o.box, q.box) >= 0.3 for q in s.objects if q.label in ("money_bag", "bag") and q.score >= 0.3):
                 return False
             return o.on_desk or o.in_cashier
-        cup_hi = [any(o.label == "cup" and o.score >= cfg["cup_enter"] and o.on_desk and cup_ok(o, s) for o in s.objects) for s in F]
+        cup_hi = [any(o.label == "cup" and o.score >= cfg["cup_enter"] and cup_ok(o, s) for o in s.objects) for s in F]
         cup_lo = [any(o.label == "cup" and o.score >= cfg["cup_hold"] and cup_ok(o, s) for o in s.objects) for s in F]
         self.cup = self._hysteresis(cup_hi, cup_lo)
         max_cash_area = max((area(b) for cb in cash_boxes for b in cb), default=0.0)
