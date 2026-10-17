@@ -68,7 +68,7 @@ class Series:
             if any(_box_iou(o.box, q.box) >= 0.3 for q in s.objects if q.label in ("money_bag", "bag") and q.score >= 0.3):
                 return False
             return o.on_desk or o.in_cashier
-        cup_hi = [any(o.label == "cup" and o.score >= cfg["cup_enter"] and cup_ok(o, s) for o in s.objects) for s in F]
+        cup_hi = [any(o.label == "cup" and o.score >= cfg["cup_enter"] and o.on_desk and cup_ok(o, s) for o in s.objects) for s in F]
         cup_lo = [any(o.label == "cup" and o.score >= cfg["cup_hold"] and cup_ok(o, s) for o in s.objects) for s in F]
         self.cup = self._hysteresis(cup_hi, cup_lo)
         max_cash_area = max((area(b) for cb in cash_boxes for b in cb), default=0.0)
