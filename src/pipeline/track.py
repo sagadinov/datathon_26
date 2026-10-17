@@ -86,6 +86,17 @@ class GreedyTracker:
         return ids
 
 
+def track_boxes(persons_per_frame: list[list[Detection]], frame_w: int, frame_h: int) -> tuple[list[list[int]], dict[int, Track]]:
+    """Track already-filtered person detections (one list per frame). Returns per-frame ids (parallel to
+    the input lists) and the tracks."""
+    tracker = GreedyTracker()
+    diag = float(np.hypot(frame_w, frame_h))
+    per_frame_ids: list[list[int]] = []
+    for i, people in enumerate(persons_per_frame):
+        per_frame_ids.append(tracker.update(i, [d.box for d in people], [d.score for d in people], diag))
+    return per_frame_ids, tracker.tracks
+
+
 def track_people(dets_per_frame: list[list[Detection]], frame_w: int, frame_h: int,
                  min_score: float = 0.35, min_height_frac: float = 0.12) -> tuple[list[list[int]], dict[int, Track]]:
     """Track `person` detections. Returns per-frame [(det index -> track id)] and the tracks."""

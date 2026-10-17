@@ -22,19 +22,20 @@ log = logging.getLogger("pipeline.detect")
 VOCAB: dict[str, list[str]] = {
     "person": ["person"],
     "hand": ["hand"],
-    "cash": ["banknotes", "cash", "stack of money"],
-    "money_bag": ["money bag", "cash bag"],
+    "cash": ["banknotes", "banknote", "bundle of banknotes", "paper money", "cash"],
+    "money_bag": ["money bag", "cash bag", "green pouch", "cash pouch"],
     "bag": ["handbag", "backpack"],
-    "cup": ["cup", "coffee cup", "drinking glass"],
+    "cup": ["cup", "coffee cup", "mug", "takeaway coffee cup", "bottle", "drinking glass"],
     "jacket": ["jacket", "coat"],
     "laptop": ["laptop"],
     "phone": ["mobile phone"],
-    "safe": ["safe", "metal cabinet"],
+    "safe": ["safe", "grey metal cabinet", "metal cabinet"],
     "safe_door_open": ["open safe door", "open cabinet door"],
     "desk": ["desk", "table"],
     "door": ["glass door"],
     "counter_machine": ["money counting machine"],
     "book": ["magazine", "book"],
+    "document": ["document", "receipt"],
 }
 MODEL_ID = "IDEA-Research/grounding-dino-tiny"
 

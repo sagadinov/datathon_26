@@ -1,23 +1,21 @@
-"""Per-frame scene state ("timeline") built from detections, tracks and the scene layout.
+"""Per-frame scene state ("timeline") v2: people, objects, screen, safe -> FrameState list.
 
-The rule engine reasons over this timeline only. Everything here is relative to detected
-objects (zones.py), so no pixel constants. Objects "on the desk" are detections of movable
-classes whose centre lies inside the desk box; people get zone memberships and a cashier flag.
+Orchestrates the modules people.py / objects.py / screen.py / safe.py (specified in
+docs/violations_observed.md, sections 3 and 6). Rules (rules.py) read only this timeline.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-import numpy as np
-
+from src.pipeline import objects as objmod
+from src.pipeline.objects import ObjState  # noqa: F401  (re-exported for rules/evidence)
+from src.pipeline import people, safe, screen
 from src.pipeline.detect import Detection
 from src.pipeline.frames import FrameSet
-from src.pipeline.track import Track, track_people
-from src.pipeline.zones import SceneLayout, build_layout, center_in, expand, inter_area, area, overlap_frac
+from src.pipeline.track import Track, track_boxes
+from src.pipeline.zones import SceneLayout, build_layout, inter_area, area
 
 Box = tuple[float, float, float, float]
-DESK_OBJECTS = ("cash", "money_bag", "bag", "cup", "book", "jacket", "phone")
-OBJ_MIN_SCORE = {"cash": 0.30, "money_bag": 0.30, "bag": 0.30, "cup": 0.30, "book": 0.30, "jacket": 0.30, "phone": 0.30}
 
 
 @dataclass
@@ -25,22 +23,17 @@ class PersonState:
     track_id: int
     box: Box
     score: float
-    anchor_overlap: float = 0.0      # fraction of the laptop/counter anchor covered by this person
-    desk_gap: float = 9.0            # distance to the desk box in desk-heights (0 = touching/overlapping)
-    at_seat: bool = False            # box overlaps the cashier seat (median cashier box)
-    in_cashier_zone: bool = False
-    near_desk: bool = False
-    at_door: bool = False
-    at_safe: bool = False
-    is_cashier: bool = False
+    in_room: bool = False          # P1: inside the cash room (not behind the glass / door)
+    is_cashier: bool = False       # this box is the cashier's (video-level identity, P3)
+    at_desk: bool = False          # desk_gap <= 0.10 (touching the desk)
+    far_side: bool = False         # on the client side of the desk (P9)
+    at_door: bool = False          # overlapping the door zone (crossing / standing in the doorway)
+    desk_gap: float = 9.0
+    seat_iou: float = 0.0
 
-
-@dataclass
-class ObjState:
-    label: str
-    score: float
-    box: Box
-    on_desk: bool
+    @property
+    def height(self) -> float:
+        return self.box[3] - self.box[1]
 
 
 @dataclass
@@ -48,32 +41,34 @@ class FrameState:
     index: int
     t: float
     persons: list[PersonState] = field(default_factory=list)
-    objects: list[ObjState] = field(default_factory=list)     # movable objects (all, with on_desk flag)
-    safe_door_open: float = 0.0                                # gated max score
-    brightness: float = 0.0                                    # mean gray 0..255
-    laptop_bright: float = 0.0                                 # mean gray inside the laptop box
-    laptop_white: float = 0.0                                  # fraction of laptop-box pixels > 170
-    hands_below_desk: int = 0
-
-    @property
-    def lights_off(self) -> bool:
-        return self.brightness < 110
-
-    @property
-    def screen_on(self) -> bool:
-        return self.laptop_white >= 0.10 and self.laptop_bright >= self.brightness - 5
+    objects: list[ObjState] = field(default_factory=list)
+    # people / cashier (P1-P3, P9)
+    cashier_present: bool = False  # an in-room box matches the cashier (seat IoU or identity)
+    seat_vacated: bool = False     # cashier standing / not sitting at the seat
+    cashier_box: Box | None = None
+    someone_at_desk: bool = False  # any in-room person touching the desk
+    n_in_room: int = 0
+    n_clients_at_desk: int = 0     # in-room non-cashiers touching the desk
+    # safe (P4, P8)
+    attending_safe: bool = False
+    door_open: bool = False
+    safe_score: float = 0.0
+    # screen / light (P6, P7)
+    screen: str = "unknown"        # active | dim | off | unknown
+    lid_closed: bool = False
+    brightness: float = 0.0
+    lights_off: bool = False
+    # hands (P10)
+    hands_visible: int = 0         # hand boxes inside the cashier box
+    hand_at_counter: bool = False
+    cash_in_hand: bool = False
 
     @property
     def cashier(self) -> PersonState | None:
         return next((p for p in self.persons if p.is_cashier), None)
 
-    @property
-    def n_persons(self) -> int:
-        return len(self.persons)
-
-    def on_desk(self, label: str, min_score: float | None = None) -> list[ObjState]:
-        ms = OBJ_MIN_SCORE.get(label, 0.3) if min_score is None else min_score
-        return [o for o in self.objects if o.label == label and o.on_desk and o.score >= ms]
+    def event_objects(self, label: str, min_score: float = 0.0) -> list[ObjState]:
+        return [o for o in self.objects if o.label == label and o.on_desk and o.is_event_object and o.score >= min_score]
 
 
 @dataclass
@@ -82,47 +77,22 @@ class Timeline:
     frames: list[FrameState]
     tracks: dict[int, Track]
     sample_fps: float
+    cashier_track_id: int | None = None
+    exit_t: float | None = None                 # P3: cashier left the room (None if never)
+    entered: list[tuple[float, int]] = field(default_factory=list)   # (t, track_id) non-cashier entered
+    left: list[tuple[float, int]] = field(default_factory=list)      # (t, track_id) non-cashier left
+    lights_off_events: list[float] = field(default_factory=list)
+    lock_events: list[float] = field(default_factory=list)
+    room_empty_start: bool = False              # nobody in the room during the first seconds
 
     def __len__(self) -> int:
         return len(self.frames)
 
-    def cashier_track_id(self) -> int | None:
-        votes: dict[int, int] = {}
-        for f in self.frames:
-            c = f.cashier
-            if c:
-                votes[c.track_id] = votes.get(c.track_id, 0) + 1
-        return max(votes, key=votes.get) if votes else None
+    def sec(self, s: float) -> int:
+        return max(1, int(round(s * self.sample_fps)))
 
 
-def _brightness(frames: FrameSet, laptop: Box | None) -> list[tuple[float, float, float]]:
-    """(frame mean gray, laptop-box mean gray, fraction of bright pixels in the laptop box)."""
-    import cv2
-
-    out = []
-    for f in frames:
-        img = cv2.imread(str(f.path), cv2.IMREAD_GRAYSCALE)
-        if img is None:
-            out.append((0.0, 0.0, 0.0))
-            continue
-        lb, lw = 0.0, 0.0
-        if laptop:
-            x1, y1, x2, y2 = (int(round(v)) for v in laptop)
-            crop = img[max(0, y1):max(0, y2), max(0, x1):max(0, x2)]
-            if crop.size:
-                lb, lw = float(crop.mean()), float((crop > 170).mean())
-        out.append((float(img.mean()), lb, lw))
-    return out
-
-
-def desk_gap(b: Box, desk: Box) -> float:
-    dh = max(1.0, desk[3] - desk[1])
-    dx = max(desk[0] - b[2], b[0] - desk[2], 0.0)
-    dy = max(desk[1] - b[3], b[1] - desk[3], 0.0)
-    return float(np.hypot(dx, dy) / dh)
-
-
-def build_timeline(frames: FrameSet, dets_per_frame: list[list[Detection]], with_brightness: bool = True) -> Timeline:
+def build_timeline(frames: FrameSet, dets_per_frame: list[list[Detection]], with_pixels: bool = True) -> Timeline:
     w, h = frames.meta.width, frames.meta.height
     if frames.frames:
         import cv2
@@ -130,55 +100,62 @@ def build_timeline(frames: FrameSet, dets_per_frame: list[list[Detection]], with
         img = cv2.imread(str(frames.frames[0].path))
         if img is not None:
             h, w = img.shape[:2]
-    ids_per_frame, tracks = track_people(dets_per_frame, w, h)
+    n = len(frames)
+    # 1-2. people: dedup per frame, then tracking on the dedup'd boxes
+    persons_raw = [people.dedup_persons([d for d in dets if d.label == "person"], h) for dets in dets_per_frame]
+    ids_per_frame, tracks = track_boxes(persons_raw, w, h)
+    # 3. layout (+ safe anchor sanity, P8)
     layout = build_layout(dets_per_frame, w, h, tracks)
-    bright = _brightness(frames, layout.laptop) if with_brightness else [(0.0, 0.0, 0.0)] * len(frames)
-    anchor, desk = layout.anchor, layout.desk
-    seat = layout.cashier_seat
-    cz, ndz, sz, dz = layout.cashier_zone, layout.near_desk_zone, layout.safe_zone, layout.door_zone
-    desk_in = expand(desk, 1.05, 1.1) if desk else None
+    layout.safe = safe.pick_safe_anchor(dets_per_frame, layout)
+    # 4-5. in_room (P1) and the cashier model (P3); ref height comes from the cashier
+    in_room0 = [[people.in_room(d.box, layout, None) for d in ps] for ps in persons_raw]
+    cm = people.CashierModel(persons_raw, ids_per_frame, tracks, layout, in_room0, frames.sample_fps)
+    in_room = [[people.in_room(d.box, layout, cm.ref_height) for d in ps] for ps in persons_raw]
+    cm.finalize(in_room)
+    # 6. roles / enter-leave events (P9)
+    roles = people.roles_and_events(persons_raw, ids_per_frame, in_room, cm, layout, frames.sample_fps)
+    # 7. hands
+    hands_per_frame = [[d for d in dets if d.label == "hand" and d.score >= 0.20] for dets in dets_per_frame]
+    # 8. objects (P5)
+    om = objmod.ObjectModel(dets_per_frame, persons_raw, cm, layout, frames)
+    # 9. screen / lights (P6, P7)
+    scr = screen.screen_states(frames, layout, persons_raw) if with_pixels else None
+    # 10. safe (P4, P8)
+    attending = safe.attending_safe_series(persons_raw, hands_per_frame, cm, layout)
+    door_open, safe_scores = safe.door_open_series(dets_per_frame, frames, layout, persons_raw, with_pixels)
+
     states: list[FrameState] = []
-    for i, (frame, dets) in enumerate(zip(frames, dets_per_frame)):
-        st = FrameState(i, frame.timestamp_sec, brightness=bright[i][0], laptop_bright=bright[i][1],
-                        laptop_white=bright[i][2])
-        persons = []
-        for d, tid in zip(dets, ids_per_frame[i]):
-            if tid < 0:
-                continue
-            p = PersonState(tid, d.box, d.score)
-            if anchor:
-                p.anchor_overlap = inter_area(d.box, anchor) / area(anchor)
-            if desk:
-                p.desk_gap = desk_gap(d.box, desk)
-            if seat:
-                p.at_seat = inter_area(d.box, seat) / max(1.0, area(seat)) > 0.4
-            p.in_cashier_zone = bool(cz and (center_in(d.box, cz) or overlap_frac(d.box, cz) > 0.5))
-            p.near_desk = bool(ndz and inter_area(d.box, ndz) > 0)
-            p.at_door = bool(dz and overlap_frac(d.box, dz) > 0.6)
-            if layout.safe:
-                sb = layout.safe
-                x_ov = max(0.0, min(d.box[2], sb[2]) - max(d.box[0], sb[0])) / max(1.0, sb[2] - sb[0])
-                p.at_safe = x_ov >= 0.5 and inter_area(d.box, sz) > 0
-            persons.append(p)
-        # cashier: the person covering the anchor most (ties -> inside cashier zone)
-        if persons:
-            best = max(persons, key=lambda p: (p.anchor_overlap, p.in_cashier_zone, -p.at_door))
-            if best.anchor_overlap >= 0.3 or (best.in_cashier_zone and best.anchor_overlap > 0.05):
-                best.is_cashier = True
-        st.persons = persons
-        for d in dets:
-            if d.label in DESK_OBJECTS and d.score >= 0.2:
-                on = bool(desk_in and center_in(d.box, desk_in))
-                st.objects.append(ObjState(d.label, d.score, d.box, on))
-            elif d.label == "safe_door_open" and layout.safe:
-                gate = expand(layout.safe, 1.5, 1.4)
-                if center_in(d.box, gate) and area(d.box) < 1.5 * area(layout.safe):
-                    st.safe_door_open = max(st.safe_door_open, d.score)
-            elif d.label == "hand" and desk and d.score >= 0.25:
-                if (d.box[1] + d.box[3]) / 2 > desk[3]:
-                    st.hands_below_desk += 1
+    for i in range(n):
+        st = FrameState(i, frames.frames[i].timestamp_sec)
+        for k, d in enumerate(persons_raw[i]):
+            p = PersonState(ids_per_frame[i][k], d.box, d.score, in_room=in_room[i][k])
+            p.is_cashier = cm.is_cashier(i, k)
+            p.desk_gap, p.at_desk, p.far_side, p.at_door, p.seat_iou = roles.person_flags(i, k)
+            st.persons.append(p)
+        st.cashier_present, st.seat_vacated, st.cashier_box = cm.present[i], cm.vacated[i], cm.box[i]
+        st.n_in_room = sum(p.in_room for p in st.persons)
+        st.someone_at_desk = any(p.in_room and p.at_desk for p in st.persons)
+        st.n_clients_at_desk = sum(p.in_room and p.at_desk and not p.is_cashier for p in st.persons)
+        st.objects = om.objects[i]
+        st.cash_in_hand = om.cash_in_hand[i]
+        st.hands_visible = sum(1 for d in hands_per_frame[i] if cm.box[i] and _center_in(d.box, cm.box[i]))
+        st.hand_at_counter = om.hand_at_counter[i]
+        st.attending_safe, st.door_open, st.safe_score = attending[i], door_open[i], safe_scores[i]
+        if scr is not None:
+            s = scr[i]
+            st.screen, st.lid_closed, st.brightness, st.lights_off = s.screen, s.lid_closed, s.brightness, s.lights_off
         states.append(st)
-    return Timeline(layout, states, tracks, frames.sample_fps)
+    tl = Timeline(layout, states, tracks, frames.sample_fps, cashier_track_id=cm.track_id, exit_t=cm.exit_t,
+                  entered=roles.entered, left=roles.left, room_empty_start=cm.room_empty_start)
+    if scr is not None:
+        tl.lights_off_events = screen.lights_off_events(scr)
+        tl.lock_events = screen.lock_events(scr, cm)
+    return tl
+
+
+def _center_in(b: Box, zone: Box) -> bool:
+    cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+    return zone[0] <= cx <= zone[2] and zone[1] <= cy <= zone[3]
 
 
 def smooth_bool(values: list[bool], min_run: int) -> list[bool]:
@@ -212,3 +189,14 @@ def runs(values: list[bool]) -> list[tuple[int, int]]:
         else:
             i += 1
     return res
+
+
+def fill_gaps(values: list[bool], max_gap: int) -> list[bool]:
+    """Bridge False gaps of length <= max_gap between True runs (tolerate missed detections)."""
+    out = list(values)
+    rs = runs(values)
+    for (a1, b1), (a2, b2) in zip(rs, rs[1:]):
+        if a2 - b1 <= max_gap:
+            for k in range(b1, a2):
+                out[k] = True
+    return out
