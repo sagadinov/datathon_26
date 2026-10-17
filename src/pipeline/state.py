@@ -84,6 +84,8 @@ class Timeline:
     lights_off_events: list[float] = field(default_factory=list)
     lock_events: list[float] = field(default_factory=list)
     room_empty_start: bool = False              # nobody in the room during the first seconds
+    cash_roi: list | None = None                # roi.py second look: valuables on the desk per frame
+    seat_box: tuple | None = None               # median seated cashier box (people.CashierModel)
 
     def __len__(self) -> int:
         return len(self.frames)
@@ -147,6 +149,7 @@ def build_timeline(frames: FrameSet, dets_per_frame: list[list[Detection]], with
         states.append(st)
     tl = Timeline(layout, states, tracks, frames.sample_fps, cashier_track_id=cm.track_id, exit_t=cm.exit_t,
                   entered=roles.entered, left=roles.left, room_empty_start=cm.room_empty_start)
+    tl.seat_box = cm.seat_box
     if scr is not None:
         tl.lights_off_events = [i / frames.sample_fps for i in screen.lights_off_events(scr)]
         tl.lock_events = [i / frames.sample_fps for i in screen.lock_events(scr, cm)]

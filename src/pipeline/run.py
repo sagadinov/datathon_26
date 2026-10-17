@@ -20,7 +20,8 @@ from src.pipeline.describe import describe, rule_block
 from src.pipeline.detect_cache import cached_detections
 from src.pipeline.evidence import evidence_frames
 from src.pipeline.frames import FrameSet, extract_frames
-from src.pipeline.rules import Event, run_rules
+from src.pipeline import roi
+from src.pipeline.rules import Event, Series, run_rules
 from src.pipeline.state import build_timeline
 from src.rules_catalog import RULES
 
@@ -111,6 +112,17 @@ def analyze(video_path: str | Path, device: str = "cpu", use_vlm: bool = False,
             log.warning("budget: kept %d of %d frames", len(keep), len(dets) if False else len(keep))
     with timed(log, "timeline", timings):
         tl = build_timeline(sub, dets)
+    with timed(log, "roi", timings):
+        try:
+            if os.environ.get("USE_ROI", "0") != "1":
+                raise RuntimeError("disabled (USE_ROI=1 to enable)")
+            cand = roi.candidate_frames(tl, Series(tl))
+            left = time_budget_sec - (time.perf_counter() - t_start) - 8.0
+            cand = cand[: max(0, int(left / 0.8))]
+            tl.cash_roi = roi.desk_valuables(sub, tl.layout, det, cand, deadline=t_start + time_budget_sec - 6.0)
+            log.info("roi: %d candidate frames, valuables in %d", len(cand), sum(tl.cash_roi))
+        except Exception as e:  # never fail the job because of the second look
+            log.info("roi stage skipped: %s", e)
     with timed(log, "rules", timings):
         events = merge_events(run_rules(tl))
     log.info("events: %s", [(e.type_id, round(e.t_start, 1), round(e.t_end, 1), round(e.score, 2)) for e in events])

@@ -50,6 +50,8 @@ class Series:
         desk_w = (tl.layout.desk[2] - tl.layout.desk[0]) if tl.layout.desk else 100.0
         # --- objects -----------------------------------------------------------------
         self.valuables = self.new_obj({"cash", "money_bag", "bag", "book"}, cfg["cash_thr"], cfg["valuables_k"])
+        if tl.cash_roi:
+            self.valuables = fill_gaps([a or b for a, b in zip(self.valuables, tl.cash_roi)], 2)
         self.cash_desk = self.new_obj({"cash"}, cfg["cash_thr"], cfg["valuables_k"])
         self.bag_desk = self.new_obj({"money_bag", "bag"}, cfg["cash_thr"], cfg["items_k"])
         self.items = self.new_obj({"bag", "money_bag", "jacket", "book"}, cfg["items_thr"], cfg["items_k"])
@@ -59,9 +61,11 @@ class Series:
 
         def cup_ok(o, s):
             w, h = o.box[2] - o.box[0], o.box[3] - o.box[1]
-            if w < 0.07 * desk_w or h < 0.8 * w or not o.is_event_object:
+            if w < 0.07 * desk_w or w > 0.22 * desk_w or h < 0.8 * w or h > 2.5 * w or not o.is_event_object:
                 return False
             if any(_box_iou(o.box, cb) >= 0.5 for cb in cash_boxes[s.index]):
+                return False
+            if any(_box_iou(o.box, q.box) >= 0.3 for q in s.objects if q.label in ("money_bag", "bag") and q.score >= 0.3):
                 return False
             return o.on_desk or o.in_cashier
         cup_hi = [any(o.label == "cup" and o.score >= cfg["cup_enter"] and cup_ok(o, s) for o in s.objects) for s in F]
@@ -90,10 +94,14 @@ class Series:
         self.away = fill_gaps([((not pr) or va) and not at and not cnt
                                for pr, va, gap, at, cnt in zip(self.present, self.vacated, self.cashier_gap,
                                                               self.attending, self.counting)], 1)
-        self.others_at_desk = [s.n_clients_at_desk for s in F]
-        self.visitors = [sum(1 for p in s.persons if p.in_room and not p.is_cashier) for s in F]
-        self.visitor_near = [sum(1 for p in s.persons if p.in_room and not p.is_cashier and p.desk_gap <= 0.3) for s in F]
-        self.intruder = [any(p.in_room and not p.is_cashier and not p.far_side and p.at_desk and p.seat_iou >= 0.10 for p in s.persons) for s in F]
+        def distinct(p, s):   # a visitor box that is not a duplicate / re-identified cashier box
+            return p.in_room and not p.is_cashier and (s.cashier_box is None or _box_iou(p.box, s.cashier_box) < 0.25)
+        self.others_at_desk = [sum(1 for p in s.persons if distinct(p, s) and p.at_desk) for s in F]
+        self.visitors = [sum(1 for p in s.persons if distinct(p, s)) for s in F]
+        self.visitor_near = [sum(1 for p in s.persons if distinct(p, s) and p.desk_gap <= 0.3) for s in F]
+        side_known = tl.layout.desk is not None and getattr(tl, "seat_box", None) is not None
+        self.intruder = [any(distinct(p, s) and not p.far_side and p.at_desk and (p.seat_iou >= 0.10 or side_known)
+                             for p in s.persons) and any(p.is_cashier for p in s.persons) for s in F]
         self.seated = [s.cashier_present and not s.seat_vacated for s in F]
         self.hands_seen = [s.hands_visible > 0 for s in F]
         self.n_in_room = [s.n_in_room for s in F]
@@ -149,6 +157,8 @@ def rule_t1(S: Series) -> list[Event]:
     out = []
     mask = [v and aw and not at and oth == 0 for v, aw, at, oth in zip(S.valuables, S.away, S.attending, S.others_at_desk)]
     for a, b in _runs_min(mask, S, S.cfg["T1A_min_s"], or_until_end=True):
+        if sum(S.seated[max(0, a - S.sec(12.0)):a]) < 2:      # a departure needs a prior seated cashier
+            continue
         obj = S.obj_boxes(a, {"cash", "money_bag", "bag", "book"}, S.cfg["cash_thr"])
         label = max(obj, key=lambda o: o.score).label if obj else "cash"
         out.append(_event(S, "T1", a, b, min(0.95, 0.55 + 0.4 * (b - a) / max(1, S.n)),
@@ -158,6 +168,9 @@ def rule_t1(S: Series) -> list[Event]:
     for t_in, tid in S.tl.entered:
         i = S._t_to_i(t_in)
         if i < k_static or sum(S.valuables[i - k_static:i]) < 0.75 * k_static:
+            continue
+        newcomer = next((p for p in S.tl.frames[i].persons if p.track_id == tid), None)
+        if newcomer is None or newcomer.seat_iou >= 0.1 or newcomer.is_cashier:
             continue
         if any(S.others_at_desk[max(0, i - k_noclient):i]):
             continue
@@ -203,13 +216,18 @@ def rule_t3(S: Series) -> list[Event]:
     if S.tl.layout.safe is None:
         return []
     safe = S.tl.layout.safe
+    seat = S.tl.seat_box
     def near_safe(s):
         b = s.cashier_box
-        if b is None or not s.seat_vacated:
+        if b is None:
             return False
         sw = safe[2] - safe[0]
         dx = max(safe[0] - b[2], b[0] - safe[2], 0.0)
-        return dx <= 0.75 * sw and min(b[3], safe[3]) > max(b[1], safe[1])
+        overlap_y = min(b[3], safe[3]) > max(b[1], safe[1])
+        if s.seat_vacated:
+            return dx <= 0.75 * sw and overlap_y
+        reaching = seat is not None and (b[2] - b[0]) >= 1.1 * (seat[2] - seat[0])
+        return dx <= 0.3 * sw and overlap_y and reaching
     mask = fill_gaps([d and not at and not near_safe(s) for d, at, s in zip(S.door_open, S.attending, S.tl.frames)], 1)
     out = []
     for a, b in _runs_min(mask, S, S.cfg["T3_min_s"]):

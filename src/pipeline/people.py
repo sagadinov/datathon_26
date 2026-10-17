@@ -77,45 +77,57 @@ class CashierModel:
         n = len(persons_raw)
         self.n = n
         seat, anchor, counter = layout.cashier_seat, layout.anchor, layout.counter_machine
-        score: dict[int, int] = {}
+        # Cashier = the most frequent at-desk position (cluster of boxes), robust to track-id switches.
+        desk = layout.desk
+        clusters: list[list[tuple[int, int, Box]]] = []     # [(frame, k, box)]
+        meds: list[Box] = []
         for i in range(n):
             for k, d in enumerate(persons_raw[i]):
-                if not in_room0[i][k]:
+                if not in_room0[i][k] or (desk and desk_gap(d.box, desk) > 0.10):
                     continue
-                cx, cy = (d.box[0] + d.box[2]) / 2, (d.box[1] + d.box[3]) / 2
-                hit = False
-                if seat and seat[0] <= cx <= seat[2] and seat[1] <= cy <= seat[3]:
-                    hit = True
-                elif anchor and inter_area(d.box, anchor) / max(1.0, area(anchor)) >= 0.15:
-                    hit = True
-                elif seat is None and anchor is None and counter and inter_area(d.box, counter) > 0:
-                    hit = True
-                if hit:
-                    score[ids_per_frame[i][k]] = score.get(ids_per_frame[i][k], 0) + 1
-        self.track_id = max(score, key=score.get) if score else None
-        if self.track_id is None and tracks:       # fallback: longest in-room track
-            lens = {tid: sum(1 for i in range(n) for k, t in enumerate(ids_per_frame[i]) if t == tid and in_room0[i][k])
-                    for tid in tracks}
-            self.track_id = max(lens, key=lens.get) if lens and max(lens.values()) > 0 else None
-        # seated reference: boxes of the cashier track that scored (seat/anchor) during the first 10 s of presence
-        ref_boxes = []
-        first = None
-        for i in range(n):
-            for k, t in enumerate(ids_per_frame[i]):
-                if t == self.track_id and in_room0[i][k]:
-                    first = i if first is None else first
-                    if i - first <= 10 * sample_fps:
-                        b = persons_raw[i][k].box
-                        if (seat and seat[0] <= (b[0] + b[2]) / 2 <= seat[2]) or (anchor and inter_area(b, anchor) > 0) or not seat:
-                            ref_boxes.append(b)
-        if ref_boxes:
-            arr = np.array(ref_boxes, dtype=np.float32)
+                for c, m in zip(clusters, meds):
+                    if iou(d.box, m) >= 0.4:
+                        c.append((i, k, d.box))
+                        if len(c) % 5 == 0:
+                            arr = np.array([x[2] for x in c], dtype=np.float32)
+                            meds[clusters.index(c)] = tuple(float(v) for v in np.median(arr, axis=0))
+                        break
+                else:
+                    clusters.append([(i, k, d.box)])
+                    meds.append(d.box)
+        if clusters:
+            def cscore(j):
+                boxes = [m[2] for m in clusters[j]]
+                seated = 0.0
+                if desk:
+                    dh = desk[3] - desk[1]
+                    seated = sum(1 for b in boxes if b[3] >= desk[1] + 0.3 * dh) / len(boxes)
+                near = 0.0
+                if anchor:
+                    aw = max(1.0, anchor[2] - anchor[0])
+                    near = sum(1 for b in boxes if max(anchor[0] - b[2], b[0] - anchor[2], 0.0) <= 0.3 * aw) / len(boxes)
+                return len(boxes) * (1.0 + seated) * (1.0 + 0.5 * near)
+            best = max(range(len(clusters)), key=cscore)
+            members = clusters[best]
+            arr = np.array([x[2] for x in members], dtype=np.float32)
             self.seat_box: Box | None = tuple(float(v) for v in np.median(arr, axis=0))
-            self.ref_height: float | None = float(np.median(arr[:, 3] - arr[:, 1]))
+            first_i = members[0][0]
+            early = arr[[j for j, x in enumerate(members) if x[0] - first_i <= 10 * sample_fps]]
+            self.ref_height: float | None = float(np.median(early[:, 3] - early[:, 1])) if len(early) else float(np.median(arr[:, 3] - arr[:, 1]))
+            ids = {}
+            for i, k, _ in members:
+                ids[ids_per_frame[i][k]] = ids.get(ids_per_frame[i][k], 0) + 1
+            self.track_id = max(ids, key=ids.get)
         else:
+            lens = {tid: sum(1 for i in range(n) for k, t in enumerate(ids_per_frame[i]) if t == tid and in_room0[i][k]) for tid in tracks}
+            self.track_id = max(lens, key=lens.get) if lens and max(lens.values()) > 0 else None
             self.seat_box, self.ref_height = seat, None
         first_frames = int(round(2 * sample_fps))
         self.room_empty_start = not any(any(in_room0[i]) for i in range(min(n, first_frames)))
+        if not self.room_empty_start and self.track_id is not None:
+            first_c = next((i for i in range(n) for k, t in enumerate(ids_per_frame[i]) if t == self.track_id and in_room0[i][k]), None)
+            if first_c is not None and first_c >= 1 and not any(any(in_room0[i]) for i in range(first_c)):
+                self.room_empty_start = True
         self.box: list[Box | None] = [None] * n
         self.present = [False] * n
         self.vacated = [True] * n
