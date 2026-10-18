@@ -170,8 +170,8 @@ def rule_t1(S: Series) -> list[Event]:
         if i < k_static or sum(S.valuables[i - k_static:i]) < 0.75 * k_static:
             continue
         newcomer = next((p for p in S.tl.frames[i].persons if p.track_id == tid), None)
-        if newcomer is None or newcomer.seat_iou >= 0.1 or newcomer.is_cashier:
-            continue
+        if newcomer is None or newcomer.seat_iou >= 0.1 or newcomer.is_cashier or not newcomer.far_side:
+            continue                                      # a newcomer on the cashier's side is T4, not T1-B
         if any(S.others_at_desk[max(0, i - k_noclient):i]):
             continue
         j = i
